@@ -41,11 +41,14 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
 
     @Override
     public void draw(Graphics2D g2d) {
+        int boxWidth = 96;
+        int boxHeight = 40;
         g2d.setColor(getRenderColor());
-        g2d.fillRoundRect((int) x, (int) y, 60, 40, 8, 8);
+        g2d.fillRoundRect((int) x, (int) y, boxWidth, boxHeight, 8, 8);
         g2d.setColor(Color.BLACK);
-        g2d.drawRoundRect((int) x, (int) y, 60, 40, 8, 8);
-        g2d.drawString(getDisplayTag(), (int) x + 5, (int) y + 25);
+        g2d.drawRoundRect((int) x, (int) y, boxWidth, boxHeight, 8, 8);
+        g2d.setFont(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 11));
+        g2d.drawString(getDisplayTag(), (int) x + 6, (int) y + 24);
     }
 
     // Subclasses can override to show status like "[Dirty]" or "[Clean]"
