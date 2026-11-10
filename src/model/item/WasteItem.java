@@ -14,6 +14,9 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
     private double y;
     private int lane;
     private boolean preprocessed;
+    private double vx;
+    private double vy;
+    private int airTimer;
 
     protected WasteItem(String name, double startX, double startY, int lane) {
         this.name = name;
@@ -48,12 +51,19 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
     public void draw(Graphics2D g2d) {
         int boxWidth = 96;
         int boxHeight = 40;
+        int arcLift = isAirborne() ? (int) (Math.sin((airTimer / 26.0) * Math.PI) * 28) : 0;
+
+        if (isAirborne()) {
+            g2d.setColor(new Color(0, 0, 0, 85));
+            g2d.fillRoundRect((int) x + 4, (int) y + 8, boxWidth, boxHeight, 8, 8);
+        }
+
         g2d.setColor(getRenderColor());
-        g2d.fillRoundRect((int) x, (int) y, boxWidth, boxHeight, 8, 8);
+        g2d.fillRoundRect((int) x, (int) y - arcLift, boxWidth, boxHeight, 8, 8);
         g2d.setColor(Color.BLACK);
-        g2d.drawRoundRect((int) x, (int) y, boxWidth, boxHeight, 8, 8);
+        g2d.drawRoundRect((int) x, (int) y - arcLift, boxWidth, boxHeight, 8, 8);
         g2d.setFont(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 11));
-        g2d.drawString(getDisplayTag(), (int) x + 6, (int) y + 24);
+        g2d.drawString(getDisplayTag(), (int) x + 6, (int) y + 24 - arcLift);
     }
 
     // Subclasses can override to show status like "[Dirty]" or "[Clean]"
@@ -70,6 +80,34 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
         this.lane = lane;
         this.y = newY;
     }
+
+    public void setPosition(double newX, double newY) {
+        this.x = newX;
+        this.y = newY;
+    }
+
+    public void launch(double vx, double vy) {
+        this.vx = vx;
+        this.vy = vy;
+        this.airTimer = 26; // Flies for 26 ticks (~0.45 sec)
+    }
+
+    public boolean updateProjectile() {
+        if (airTimer > 0) {
+            this.x += vx;
+            this.y += vy;
+            this.vx *= 0.94;
+            this.vy *= 0.94;
+            this.airTimer--;
+            return airTimer == 0; // Returns true on the exact tick it lands
+        }
+        return false;
+    }
+
+    public boolean isAirborne() {
+        return airTimer > 0;
+    }
+
     public boolean isPreprocessed() { return preprocessed; }
     protected void setPreprocessed(boolean preprocessed) { this.preprocessed = preprocessed; }
 
