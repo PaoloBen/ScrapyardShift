@@ -1,6 +1,11 @@
 package game;
 
-import model.*;
+import model.exception.BinFullException;
+import model.item.*;
+import model.player.Player;
+import model.station.StationType;
+import model.station.StorageBay;
+
 import java.util.*;
 
 public class ConsolePrototype {

@@ -1,6 +1,8 @@
 package ui;
 
 import game.GameController;
+import ui.screen.FactoryPanel;
+
 import javax.swing.*;
 
 public class ScrapyardApp {
