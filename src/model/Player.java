@@ -30,6 +30,10 @@ public class Player {
         this.streakMeter.reset(0);
     }
 
+    public void resetScore() {
+        this.score = 0;
+    }
+
     public String getName() { return name; }
     public int getScore() { return score; }
     public ComplianceMeter getComplianceMeter() { return complianceMeter; }

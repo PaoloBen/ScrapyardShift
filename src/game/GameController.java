@@ -150,9 +150,11 @@ public class GameController {
 
     public void resetGame() {
         this.currentLevelIndex = 0;
+        this.spawnTimer = 0;
         this.beltItems.clear();
         this.mistakeLog.clear();
         this.bays.values().forEach(StorageBay::empty);
+        this.player.resetScore();
         this.player.getComplianceMeter().reset(100);
         this.player.getStreakMeter().reset(0);
         this.gameOver = false;
