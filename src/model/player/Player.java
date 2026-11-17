@@ -11,6 +11,7 @@ public class Player implements Renderable {
     private String name;
     private int score;
     private int credits = 0;
+    private int pendingCredits = 0;
     private double speedMultiplier = 1.0;
     private final ComplianceMeter complianceMeter;
     private final StreakMeter streakMeter;
@@ -24,6 +25,8 @@ public class Player implements Renderable {
     private int dashTimer;
     private int dashCooldown;
     private double walkCycle;
+    private double idleCycle;
+    private boolean moving;
     private double throwDx = 0;
     private double throwDy = 1;
 
@@ -53,9 +56,13 @@ public class Player implements Renderable {
         if (dashTimer > 0) dashTimer--;
 
         if (dx == 0 && dy == 0) {
-            walkCycle = 0;
+            this.moving = false;
+            this.walkCycle = 0;
+            this.idleCycle += 0.08; // Smooth breathing & hand bob while standing still!
+            syncHeldItemPosition();
             return;
         }
+        this.moving = true;
 
         if (Math.abs(dx) >= Math.abs(dy)) {
             facing = dx > 0 ? Direction.RIGHT : Direction.LEFT;
@@ -64,22 +71,18 @@ public class Player implements Renderable {
         }
 
         double length = Math.hypot(dx, dy);
-        this.throwDx = dx / length;
-        this.throwDy = dy / length;
+        double moveUnitX = dx / length;
+        double moveUnitY = dy / length;
+        if (keyboardAimMode) {
+            this.throwDx = moveUnitX;
+            this.throwDy = moveUnitY;
+        }
 
         double speed = ((dashTimer > 0) ? 8.5 : 4.2) * speedMultiplier;
-        double nextX = Math.max(minX, Math.min(maxX, this.x + this.throwDx * speed));
-        double nextY = Math.max(minY, Math.min(maxY, this.y + this.throwDy * speed));
+        double nextX = Math.max(minX, Math.min(maxX, this.x + moveUnitX * speed));
+        double nextY = Math.max(minY, Math.min(maxY, this.y + moveUnitY * speed));
 
-        // Solid collision around the top Conveyor Belt & Incinerator (x < 655, y < 195),
-        // leaving the right-side corridor (x >= 655) open up to y = 95 for BIODEGRADABLE!
-        if (nextX < 655 && nextY < 195) {
-            if (this.x >= 655) {
-                nextX = 655;
-            } else {
-                nextY = 195;
-            }
-        }
+        // Full 360-degree floor mobility for dynamic stage layouts
 
         this.x = nextX;
         this.y = nextY;
@@ -187,20 +190,42 @@ public class Player implements Renderable {
         }
     }
 
+    private boolean keyboardAimMode = false;
+    public boolean isKeyboardAimMode() { return keyboardAimMode; }
+    public void setKeyboardAimMode(boolean kbAim) { this.keyboardAimMode = kbAim; }
     public double getThrowDx() { return throwDx; }
     public double getThrowDy() { return throwDy; }
 
     // Score & Meter logic
     public void addScore(int basePoints) {
         this.score += basePoints + streakMeter.getBonus();
-        this.credits += 15 + streakMeter.getBonus();
+        this.pendingCredits += 15 + streakMeter.getBonus();
         this.streakMeter.change(1);
     }
 
     public void addScore(int basePoints, int preprocessBonus) {
         this.score += basePoints + preprocessBonus + streakMeter.getBonus();
-        this.credits += 30 + streakMeter.getBonus();
+        this.pendingCredits += 30 + streakMeter.getBonus();
         this.streakMeter.change(1);
+    }
+
+    public void addPendingCredits(int amount) {
+        this.pendingCredits += Math.max(0, amount);
+    }
+
+    public int getPendingCredits() {
+        return pendingCredits;
+    }
+
+    public int bankPendingCredits() {
+        int earned = this.pendingCredits;
+        this.credits += earned;
+        this.pendingCredits = 0;
+        return earned;
+    }
+
+    public void clearPendingCredits() {
+        this.pendingCredits = 0;
     }
 
     public void applyPenalty(int penaltyAmount) {
@@ -248,6 +273,14 @@ public class Player implements Renderable {
     public void setCredits(int credits) { this.credits = Math.max(0, credits); }
     public void addCredits(int amount) { this.credits += amount; }
     public double getWalkCycle() { return walkCycle; }
+    public double getIdleCycle() { return idleCycle; }
+    public boolean isMoving() { return moving; }
+    public double getSpeedMultiplier() { return speedMultiplier; }
+    public void setCoordinates(double newX, double newY) {
+        this.x = newX;
+        this.y = newY;
+        syncHeldItemPosition();
+    }
     public boolean spendCredits(int cost) {
         if (this.credits >= cost) {
             this.credits -= cost;

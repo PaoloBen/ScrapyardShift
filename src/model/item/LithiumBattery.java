@@ -21,8 +21,12 @@ public class LithiumBattery extends WasteItem {
     }
 
     @Override
-    public BinType getTargetBin() {
-        return BinType.HAZARDOUS;
+    public model.station.StationType getRequiredStation() {
+        return neutralized ? null : model.station.StationType.NEUTRALIZER;
+    }
+
+    @Override
+    public BinType getTargetBin() {return BinType.HAZARDOUS;
     }
 
     @Override

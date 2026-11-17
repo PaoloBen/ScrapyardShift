@@ -15,20 +15,20 @@ public class PixelArtGenerator {
 
     private static final Map<Character, Color> PALETTE = Map.ofEntries(
             Map.entry('.', new Color(0, 0, 0, 0)),
-            Map.entry('K', Color.valueOf("181C20")), // Outlines
-            Map.entry('W', Color.valueOf("F5F6FA")), // White highlight
-            Map.entry('G', Color.valueOf("7F8FA6")), // Metal Gray
-            Map.entry('D', Color.valueOf("353B48")), // Dark Steel
-            Map.entry('Y', Color.valueOf("FBC531")), // Banana / Hazard Yellow
-            Map.entry('O', Color.valueOf("E1B12C")), // Mango / Gold Orange
-            Map.entry('R', Color.valueOf("E84118")), // Red / Biohazard
-            Map.entry('B', Color.valueOf("00A8FF")), // Clean Plastic Blue
-            Map.entry('C', Color.valueOf("00FFCC")), // Cyber / Acid Green-Cyan
-            Map.entry('E', Color.valueOf("4CD137")), // Eco Green
-            Map.entry('P', Color.valueOf("9C88FF")), // Wrapper Purple
-            Map.entry('M', Color.valueOf("8C7AE6")), // Dark Purple
-            Map.entry('N', Color.valueOf("71583E")), // Cardboard / Dirt Brown
-            Map.entry('T', Color.valueOf("C29B61"))  // Tan Box
+            Map.entry('K', Color.valueOf("181C20")),
+            Map.entry('W', Color.valueOf("F5F6FA")),
+            Map.entry('G', Color.valueOf("7F8FA6")),
+            Map.entry('D', Color.valueOf("353B48")),
+            Map.entry('Y', Color.valueOf("FBC531")),
+            Map.entry('O', Color.valueOf("E1B12C")),
+            Map.entry('R', Color.valueOf("E84118")),
+            Map.entry('B', Color.valueOf("00A8FF")),
+            Map.entry('C', Color.valueOf("00FFCC")),
+            Map.entry('E', Color.valueOf("4CD137")),
+            Map.entry('P', Color.valueOf("9C88FF")),
+            Map.entry('M', Color.valueOf("8C7AE6")),
+            Map.entry('N', Color.valueOf("71583E")),
+            Map.entry('T', Color.valueOf("C29B61"))
     );
 
     public static Texture loadOrCreate(String relativePath, PixmapBuilder builder) {
@@ -36,7 +36,15 @@ public class PixelArtGenerator {
         if (!file.exists()) {
             file = Gdx.files.local("assets/" + relativePath);
         }
-        if (!file.exists()) {
+        boolean needsCreate = !file.exists();
+        if (!needsCreate && (relativePath.startsWith("items/") || relativePath.contains("forklift"))) {
+            Texture check = new Texture(file);
+            if ((check.getWidth() == 96 && check.getHeight() == 40) || check.getWidth() == 92) {
+                needsCreate = true;
+            }
+            check.dispose();
+        }
+        if (needsCreate) {
             file = Gdx.files.local("src/assets/" + relativePath);
             file.parent().mkdirs();
             Pixmap pm = builder.build();
@@ -54,128 +62,240 @@ public class PixelArtGenerator {
     }
 
     public static Pixmap buildItemCard(Color cardBg, Color badgeTint, String[] grid16) {
-        Pixmap pm = new Pixmap(96, 40, Pixmap.Format.RGBA8888);
-        // Outer industrial bevel
-        pm.setColor(Color.valueOf("181C20"));
-        pm.fillRectangle(0, 0, 96, 40);
-        pm.setColor(cardBg);
-        pm.fillRectangle(2, 2, 92, 36);
-
-        // Top highlight & bottom shadow bevel
-        pm.setColor(new Color(1f, 1f, 1f, 0.25f));
-        pm.fillRectangle(2, 2, 92, 3);
-        pm.setColor(new Color(0f, 0f, 0f, 0.35f));
-        pm.fillRectangle(2, 35, 92, 3);
-
-        // Left Icon Slot
-        pm.setColor(Color.valueOf("1E272E"));
-        pm.fillRectangle(4, 4, 32, 32);
-        pm.setColor(badgeTint);
-        pm.drawRectangle(4, 4, 32, 32);
-
-        // Draw 16x16 Pixel Art scaled 2x inside the 32x32 slot
-        drawGrid(pm, grid16, 4, 4, 2);
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        drawGrid(pm, grid16, 0, 0, 3);
         return pm;
     }
 
     public static Pixmap buildStationSprite(StationType type) {
-        Pixmap pm = new Pixmap(110, 70, Pixmap.Format.RGBA8888);
-        Color header = switch (type) {
-            case WASHER -> Color.valueOf("0097E6");
-            case DISMANTLER -> Color.valueOf("E17055");
-            case NEUTRALIZER -> Color.valueOf("00B894");
-        };
-
-        // Steel chassis with corner bolts
+        Pixmap pm = new Pixmap(84, 72, Pixmap.Format.RGBA8888);
         pm.setColor(Color.valueOf("181C20"));
-        pm.fillRectangle(0, 0, 110, 70);
-        pm.setColor(Color.valueOf("2F3640"));
-        pm.fillRectangle(2, 2, 106, 66);
-        pm.setColor(header);
-        pm.fillRectangle(2, 2, 106, 18);
+        pm.fillRectangle(0, 0, 84, 72);
 
-        // Machine details inside body
-        pm.setColor(Color.valueOf("1E272E"));
-        pm.fillCircle(55, 45, 18);
-        pm.setColor(header);
-        pm.drawCircle(55, 45, 18);
-        pm.drawCircle(55, 45, 12);
-
-        // Corner rivets
-        pm.setColor(Color.valueOf("7F8FA6"));
-        pm.fillCircle(7, 25, 2);
-        pm.fillCircle(103, 25, 2);
-        pm.fillCircle(7, 63, 2);
-        pm.fillCircle(103, 63, 2);
+        switch (type) {
+            case WASHER -> {
+                pm.setColor(Color.valueOf("DCE1E7"));
+                pm.fillRectangle(2, 2, 80, 68);
+                pm.setColor(Color.valueOf("0097E6"));
+                pm.fillRectangle(2, 2, 80, 16);
+                pm.setColor(Color.valueOf("F5F6FA"));
+                pm.fillRectangle(6, 5, 22, 10);
+                pm.setColor(Color.valueOf("FBC531"));
+                pm.fillCircle(62, 10, 4);
+                pm.setColor(Color.valueOf("4CD137"));
+                pm.fillCircle(73, 10, 4);
+                pm.setColor(Color.valueOf("2F3640"));
+                pm.fillCircle(42, 43, 22);
+                pm.setColor(Color.valueOf("7F8FA6"));
+                pm.fillCircle(42, 43, 19);
+                pm.setColor(Color.valueOf("00A8FF"));
+                pm.fillCircle(42, 43, 15);
+                pm.setColor(Color.valueOf("7ED6DF"));
+                pm.fillCircle(37, 47, 6);
+                pm.fillCircle(48, 45, 5);
+                pm.setColor(Color.WHITE);
+                pm.fillCircle(36, 36, 3);
+                pm.fillCircle(47, 39, 2);
+            }
+            case DISMANTLER -> {
+                pm.setColor(Color.valueOf("353B48"));
+                pm.fillRectangle(2, 2, 80, 68);
+                pm.setColor(Color.valueOf("E17055"));
+                pm.fillRectangle(2, 2, 80, 12);
+                pm.setColor(Color.valueOf("1E272E"));
+                pm.fillRectangle(8, 18, 68, 44);
+                pm.setColor(Color.valueOf("FBC531"));
+                pm.fillRectangle(8, 28, 10, 24);
+                pm.fillRectangle(66, 28, 10, 24);
+                pm.setColor(Color.valueOf("BDC3C7"));
+                pm.fillCircle(33, 40, 13);
+                pm.fillCircle(51, 40, 13);
+                pm.setColor(Color.valueOf("E84118"));
+                pm.fillCircle(33, 40, 4);
+                pm.fillCircle(51, 40, 4);
+            }
+            case NEUTRALIZER -> {
+                pm.setColor(Color.valueOf("2F3640"));
+                pm.fillRectangle(2, 2, 80, 68);
+                pm.setColor(Color.valueOf("00B894"));
+                pm.fillRectangle(6, 2, 72, 12);
+                pm.fillRectangle(6, 58, 72, 12);
+                pm.setColor(Color.valueOf("102A24"));
+                pm.fillRectangle(16, 14, 52, 44);
+                pm.setColor(Color.valueOf("00FFCC"));
+                pm.drawRectangle(16, 14, 52, 44);
+                pm.fillCircle(34, 38, 6);
+                pm.fillCircle(48, 30, 8);
+                pm.setColor(Color.valueOf("FBC531"));
+                for (int y = 20; y <= 48; y += 9) {
+                    pm.fillRectangle(8, y, 8, 5);
+                    pm.fillRectangle(68, y, 8, 5);
+                }
+            }
+        }
         return pm;
     }
 
-    public static Pixmap buildBaySprite(BinType type) {
-        Pixmap pm = new Pixmap(145, 62, Pixmap.Format.RGBA8888);
-        Color accent = switch (type) {
-            case BIODEGRADABLE -> Color.valueOf("4CD137");
-            case RECYCLABLE -> Color.valueOf("00A8FF");
-            case RESIDUAL -> Color.valueOf("7F8FA6");
-            case HAZARDOUS -> Color.valueOf("E84118");
+    public static Pixmap buildBaySprite(BinType type, int fillStage) {
+        Pixmap pm = new Pixmap(88, 72, Pixmap.Format.RGBA8888);
+        Color bodyCol = switch (type) {
+            case BIODEGRADABLE -> Color.valueOf("2ECC71");
+            case RECYCLABLE    -> Color.valueOf("0984E3");
+            case RESIDUAL      -> Color.valueOf("636E72");
+            case HAZARDOUS     -> Color.valueOf("D63031");
+        };
+        Color rimCol = switch (type) {
+            case BIODEGRADABLE -> Color.valueOf("27AE60");
+            case RECYCLABLE    -> Color.valueOf("74B9FF");
+            case RESIDUAL      -> Color.valueOf("B2BEC3");
+            case HAZARDOUS     -> Color.valueOf("FBC531");
         };
 
         pm.setColor(Color.valueOf("181C20"));
-        pm.fillRectangle(0, 0, 145, 62);
-        pm.setColor(Color.valueOf("273C75"));
-        pm.fillRectangle(2, 2, 141, 58);
-        pm.setColor(Color.valueOf("1E272E"));
-        pm.fillRectangle(4, 18, 137, 40);
+        pm.fillRectangle(4, 8, 80, 62);
+        pm.setColor(bodyCol);
+        pm.fillRectangle(6, 10, 76, 58);
 
-        // Colored top hazard/category bar + side ribs
-        pm.setColor(accent);
-        pm.fillRectangle(2, 2, 141, 16);
-        pm.fillRectangle(2, 2, 6, 58);
-        pm.fillRectangle(137, 2, 6, 58);
+        pm.setColor(Color.valueOf("1E272E"));
+        pm.fillRectangle(8, 10, 72, 22);
+
+        if (fillStage >= 1) {
+            pm.setColor(Color.valueOf("C29B61"));
+            pm.fillCircle(26, 26, 8);
+            pm.setColor(Color.valueOf("00A8FF"));
+            pm.fillRectangle(42, 20, 14, 10);
+        }
+        if (fillStage >= 2) {
+            pm.setColor(Color.valueOf("FBC531"));
+            pm.fillCircle(36, 20, 9);
+            pm.setColor(Color.valueOf("9C88FF"));
+            pm.fillCircle(58, 22, 8);
+        }
+        if (fillStage >= 3) {
+            pm.setColor(Color.valueOf("E84118"));
+            pm.fillCircle(28, 13, 9);
+            pm.setColor(Color.valueOf("4CD137"));
+            pm.fillCircle(46, 11, 10);
+            pm.setColor(Color.valueOf("F5F6FA"));
+            pm.fillCircle(62, 14, 8);
+        }
+
+        pm.setColor(fillStage >= 3 ? Color.RED : rimCol);
+        pm.fillRectangle(2, 28, 84, 6);
+        pm.setColor(new Color(0f, 0f, 0f, 0.22f));
+        pm.fillRectangle(18, 36, 6, 28);
+        pm.fillRectangle(64, 36, 6, 28);
+
+        pm.setColor(Color.WHITE);
+        switch (type) {
+            case BIODEGRADABLE -> {
+                pm.fillCircle(44, 50, 9);
+                pm.setColor(bodyCol);
+                pm.drawLine(44, 42, 44, 58);
+            }
+            case RECYCLABLE -> {
+                pm.drawCircle(44, 50, 10);
+                pm.drawCircle(44, 50, 9);
+                pm.fillCircle(44, 40, 3);
+                pm.fillCircle(35, 55, 3);
+                pm.fillCircle(53, 55, 3);
+            }
+            case RESIDUAL -> {
+                pm.fillRectangle(36, 44, 16, 14);
+                pm.fillCircle(44, 42, 5);
+            }
+            case HAZARDOUS -> {
+                pm.setColor(Color.valueOf("FBC531"));
+                pm.fillCircle(44, 50, 11);
+                pm.setColor(Color.BLACK);
+                pm.fillCircle(40, 48, 3);
+                pm.fillCircle(48, 48, 3);
+                pm.fillCircle(44, 55, 3);
+            }
+        }
         return pm;
     }
 
     public static Pixmap buildIncineratorSprite() {
-        Pixmap pm = new Pixmap(86, 66, Pixmap.Format.RGBA8888);
+        Pixmap pm = new Pixmap(76, 68, Pixmap.Format.RGBA8888);
         pm.setColor(Color.valueOf("181C20"));
-        pm.fillRectangle(0, 0, 86, 66);
-        pm.setColor(Color.valueOf("C23616"));
-        pm.fillRectangle(2, 2, 82, 62);
+        pm.fillRectangle(0, 0, 76, 68);
+        pm.setColor(Color.valueOf("8B1E0F"));
+        pm.fillRectangle(2, 2, 72, 64);
 
-        // Hazard stripes on top & bottom
         pm.setColor(Color.valueOf("FBC531"));
-        for (int x = 4; x < 80; x += 12) {
-            pm.fillRectangle(x, 4, 6, 6);
-            pm.fillRectangle(x, 56, 6, 6);
+        for (int x = 4; x < 70; x += 12) {
+            pm.fillRectangle(x, 4, 6, 5);
+            pm.fillRectangle(x, 59, 6, 5);
         }
 
-        // Glowing Fire Core
-        pm.setColor(Color.valueOf("1E272E"));
-        pm.fillRectangle(10, 14, 66, 38);
-        pm.setColor(Color.valueOf("E84118"));
-        pm.fillCircle(43, 34, 14);
+        pm.setColor(Color.valueOf("14171A"));
+        pm.fillRectangle(10, 14, 56, 40);
+        pm.fillCircle(38, 24, 20);
+        return pm;
+    }
+
+    public static Pixmap buildAppIcon() {
+        Pixmap pm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
+        pm.setColor(Color.valueOf("181C20"));
+        pm.fillCircle(16, 16, 15);
+        pm.setColor(Color.valueOf("0984E3"));
+        pm.fillCircle(16, 16, 13);
         pm.setColor(Color.valueOf("FBC531"));
-        pm.fillCircle(43, 34, 8);
+        pm.fillRectangle(7, 10, 18, 9);
+        pm.fillRectangle(5, 17, 22, 4);
+        pm.setColor(Color.valueOf("00FFCC"));
+        pm.fillRectangle(9, 22, 14, 4);
         return pm;
     }
 
     public static Pixmap buildForkliftSprite() {
-        Pixmap pm = new Pixmap(112, 70, Pixmap.Format.RGBA8888);
-        pm.setColor(Color.valueOf("181C20"));
-        pm.fillRectangle(0, 0, 112, 70);
-        pm.setColor(Color.valueOf("E1B12C"));
-        pm.fillRectangle(2, 2, 108, 66);
-        pm.setColor(Color.valueOf("2F3640"));
-        pm.fillRectangle(6, 22, 100, 42);
-        // Lever slot
-        pm.setColor(Color.valueOf("E84118"));
-        pm.fillCircle(90, 43, 7);
+        // 138x102 Proportional Side-Profile Pixel-Art Forklift (46x34 grid scaled 3x)
+        Pixmap pm = new Pixmap(138, 102, Pixmap.Format.RGBA8888);
+        String[] fkGrid = {
+                "..............................................",
+                ".............................KKKKKK...........",
+                ".............................KGGGGK...........",
+                ".............KKKKKKKKKKKKK...KGGGGK...........",
+                "............KGGGGGGGGGGGGGK..KGGGGK...........",
+                "............KGKKKKKKKKKKKGK..KGGDGK...........",
+                "...........KGGK.........KGGK.KGGDGK...........",
+                "...........KGGK.........KGGK.KGGDGK...........",
+                "..........KGGK...........KGGKKGGDGK...........",
+                "..........KGGK...........KGGKKGGDGK...........",
+                ".........KGGK............KGGKKGGDGK...........",
+                ".........KGGK.........KKKKGGKKGGDGK...........",
+                "........KGGK.........KGGGGGGKKGGDGK...........",
+                "........KGGK..........KGGKGGKKGGDGK...........",
+                ".......KGGK............KK.KGGKGGDGK...........",
+                "....KKKKGGKKKK............KGGKGGDGK...........",
+                "...KYYYYYYYYYYK...........KGGKGGDGKKKK........",
+                "..KYYYYYYYYYYYYK.........KOOOKGGDGKGGGK.......",
+                "..KOOOOOOOOOOOOKDDDDDDDDDKYYYYGGDGKGGGK.......",
+                "..KNNNNNNNNNNNNKDDDDDDDDDKOOOOYGDGKGGGK.......",
+                "..KOOOOOOOOOOOOKKKKKKKKKKKOOOOOGDGKGGGK.......",
+                "..KOOOOOOOOOOOOYYYYYYYYYYOOOOOOGDGKGGGK.......",
+                "..KOOOOOOOOOOOOOOOOOOOOOKKKKKKKGDGKGGGK.......",
+                "..KOOOONNNNNNNNOOOOOOOOKKKKKKKKGDGKGGGK.......",
+                "..KOOONKKKKKKKKNOOOOOOKKKYYYYKKKDGKGGGK.......",
+                "..KOOOKKKKKKKKKKOOOOOOKKYYNNYYKKDGKGGGK.......",
+                "..KNNNKKKYYYYKKKOOOOOOKKYNKKNYKKDGKGGGK.......",
+                "...KKKKKYYNNYYKKOOOOOOKKYNKKNYKKDGKGGGKKKKKKKK",
+                "......KKYNKKNYKKKKKKKKKKYYNNYYKKDGKGGGGGGGGGGK",
+                "......KKYYNNYYK........KKYYYYKKKDGKGGGGGGGGGGK",
+                ".......KKKKKKKK.........KKKKKKKKKKKKKKK.......",
+                "........KKKKKK...........KKKKKK...............",
+                "..............................................",
+                ".............................................."
+        };
+        drawGrid(pm, fkGrid, 0, 0, 3);
         return pm;
     }
 
     private static void drawGrid(Pixmap pm, String[] rows, int startX, int startY, int scale) {
-        for (int r = 0; r < Math.min(16, rows.length); r++) {
+        for (int r = 0; r < rows.length; r++) {
             String row = rows[r];
-            for (int c = 0; c < Math.min(16, row.length()); c++) {
+            for (int c = 0; c < row.length(); c++) {
                 Color col = PALETTE.get(row.charAt(c));
                 if (col != null && col.a > 0) {
                     pm.setColor(col);
@@ -185,7 +305,6 @@ public class PixelArtGenerator {
         }
     }
 
-    // 16x16 Pixel Art Patterns
     public static final String[] ICON_BANANA = {
             ".......KK.......", "......KYYK......", ".....KYYYYK.....", ".....KYYYYK.....",
             "....KYYYYK......", "....KYYYYK......", "...KYYYYYYK.....", "..KYYYYYYYYK....",

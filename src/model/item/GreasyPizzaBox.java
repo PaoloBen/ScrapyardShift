@@ -21,6 +21,11 @@ public class GreasyPizzaBox extends WasteItem {
     }
 
     @Override
+    public model.station.StationType getRequiredStation() {
+        return degreased ? null : model.station.StationType.WASHER;
+    }
+
+    @Override
     public BinType getTargetBin() {
         return degreased ? BinType.RECYCLABLE : BinType.RESIDUAL;
     }

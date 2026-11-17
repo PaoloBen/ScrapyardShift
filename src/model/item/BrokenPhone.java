@@ -21,6 +21,11 @@ public class BrokenPhone extends WasteItem {
     }
 
     @Override
+    public model.station.StationType getRequiredStation() {
+        return dismantled ? null : model.station.StationType.DISMANTLER;
+    }
+
+    @Override
     public BinType getTargetBin() {
         // Intact phone has a dangerous battery inside -> HAZARDOUS
         // Once dismantled, the metal/plastic frame goes to -> RECYCLABLE

@@ -29,13 +29,19 @@ public class GdxAssets {
 
     private final Map<String, Texture> itemSprites = new HashMap<>();
     private final Map<model.station.StationType, Texture> stationSprites = new java.util.EnumMap<>(model.station.StationType.class);
-    private final Map<model.item.BinType, Texture> baySprites = new java.util.EnumMap<>(model.item.BinType.class);
+    private final Map<model.item.BinType, Texture[]> baySprites = new java.util.EnumMap<>(model.item.BinType.class);
 
     public Sound sfxGrab;
     public Sound sfxThrow;
     public Sound sfxSuccess;
     public Sound sfxError;
     public Sound sfxClick;
+    public Sound sfxDoorSlam;
+    public Sound sfxVictoryFanfare;
+    public Sound sfxGameOverTrack;
+
+    public final Sound[] bgmStages = new Sound[5];
+    public Sound bgmCustomize;
     public Sound bgmLoop;
 
     public GdxAssets() {
@@ -54,20 +60,25 @@ public class GdxAssets {
         floorTileB = PixelArtGenerator.loadOrCreate("stations/floor_tile_b.png",
                 () -> createTilePixmap(new Color(0.17f, 0.22f, 0.26f, 1f), new Color(0.15f, 0.19f, 0.22f, 1f)));
         botTexture = PixelArtGenerator.loadOrCreate("player/cleaner_bot.png", this::createBotPixmap);
-        incineratorTexture = PixelArtGenerator.loadOrCreate("stations/incinerator.png", PixelArtGenerator::buildIncineratorSprite);
-        forkliftTexture = PixelArtGenerator.loadOrCreate("stations/forklift_bay.png", PixelArtGenerator::buildForkliftSprite);
+        incineratorTexture = PixelArtGenerator.loadOrCreate("stations/incinerator_v2.png", PixelArtGenerator::buildIncineratorSprite);
+        forkliftTexture = PixelArtGenerator.loadOrCreate("stations/forklift_vehicle_v2.png", PixelArtGenerator::buildForkliftSprite);
 
         for (model.station.StationType st : model.station.StationType.values()) {
             stationSprites.put(st, PixelArtGenerator.loadOrCreate(
-                    "stations/station_" + st.name().toLowerCase() + ".png",
+                    "stations/machine_" + st.name().toLowerCase() + ".png",
                     () -> PixelArtGenerator.buildStationSprite(st)
             ));
         }
         for (model.item.BinType bt : model.item.BinType.values()) {
-            baySprites.put(bt, PixelArtGenerator.loadOrCreate(
-                    "stations/bay_" + bt.name().toLowerCase() + ".png",
-                    () -> PixelArtGenerator.buildBaySprite(bt)
-            ));
+            Texture[] stages = new Texture[4];
+            for (int s = 0; s < 4; s++) {
+                final int stageIdx = s;
+                stages[s] = PixelArtGenerator.loadOrCreate(
+                        "stations/bin_" + bt.name().toLowerCase() + "_" + s + ".png",
+                        () -> PixelArtGenerator.buildBaySprite(bt, stageIdx)
+                );
+            }
+            baySprites.put(bt, stages);
         }
 
         FileHandle customPlayerFile = Gdx.files.local("src/assets/player/player_sheet.png");
@@ -143,49 +154,13 @@ public class GdxAssets {
         return stationSprites.getOrDefault(type, whitePixel);
     }
 
-    public Texture getBaySprite(model.item.BinType type) {
-        return baySprites.getOrDefault(type, whitePixel);
-    }
-
-    private Texture makeIcon(Color primary, Color detail, String shape) {
-        Pixmap pm = new Pixmap(96, 40, Pixmap.Format.RGBA8888);
-        // Card body
-        pm.setColor(primary);
-        pm.fillRectangle(2, 2, 92, 36);
-        pm.setColor(Color.BLACK);
-        pm.drawRectangle(0, 0, 96, 40);
-        pm.drawRectangle(1, 1, 94, 38);
-
-        // Left pixel-art emblem box
-        pm.setColor(new Color(0, 0, 0, 0.28f));
-        pm.fillRectangle(5, 5, 26, 30);
-        pm.setColor(detail);
-        switch (shape) {
-            case "BOTTLE" -> {
-                pm.fillRectangle(14, 7, 8, 5);
-                pm.fillRectangle(11, 12, 14, 20);
-            }
-            case "CAN" -> {
-                pm.fillRectangle(11, 9, 14, 22);
-                pm.setColor(Color.WHITE);
-                pm.drawLine(11, 13, 25, 13);
-            }
-            case "PHONE" -> {
-                pm.fillRectangle(11, 7, 14, 26);
-                pm.setColor(Color.BLACK);
-                pm.fillRectangle(13, 10, 10, 18);
-            }
-            case "BATT", "CHEM" -> {
-                pm.fillRectangle(10, 10, 16, 22);
-                pm.setColor(Color.BLACK);
-                pm.fillCircle(18, 21, 5);
-            }
-            default -> pm.fillCircle(18, 20, 9);
-        }
-
-        Texture tex = new Texture(pm);
-        pm.dispose();
-        return tex;
+    public Texture getBaySprite(model.item.BinType type, int fillLevel, int capacity) {
+        Texture[] stages = baySprites.get(type);
+        if (stages == null) return whitePixel;
+        if (fillLevel <= 0) return stages[0];
+        if (fillLevel >= capacity) return stages[3];
+        float ratio = (float) fillLevel / Math.max(1, capacity);
+        return (ratio < 0.5f) ? stages[1] : stages[2];
     }
 
     public Texture getItemSprite(String tag) {
@@ -199,8 +174,93 @@ public class GdxAssets {
             sfxSuccess = generateToneSound(440, 880, 0.18f);
             sfxError = generateToneSound(220, 110, 0.28f);
             sfxClick = generateToneSound(800, 900, 0.04f);
-            bgmLoop = generateBgmTrack();
+            sfxDoorSlam = generateDoorSlamSound();
+            sfxVictoryFanfare = generateJingle(new int[]{523, 659, 784, 1046, 784, 1046}, 0.14f);
+            sfxGameOverTrack = generateJingle(new int[]{392, 370, 349, 330, 293, 261}, 0.20f);
+
+            // 5 Unique Stage BGM Tracks (Different keys, tempos, and melodies for each shift!)
+            bgmStages[0] = generateStageTrack(
+                    new int[]{523, 0, 659, 587, 523, 659, 784, 0, 698, 0, 659, 587, 523, 587, 659, 0},
+                    new int[]{131, 131, 196, 196, 175, 175, 131, 196}, 7, true);
+            bgmStages[1] = generateStageTrack(
+                    new int[]{440, 523, 659, 0, 587, 523, 440, 0, 392, 440, 523, 587, 659, 0, 587, 0},
+                    new int[]{110, 110, 165, 165, 147, 147, 110, 165}, 8, true);
+            bgmStages[2] = generateStageTrack(
+                    new int[]{587, 698, 880, 0, 784, 698, 659, 0, 587, 659, 698, 784, 880, 0, 784, 659},
+                    new int[]{147, 147, 220, 220, 175, 175, 196, 196}, 9, true);
+            bgmStages[3] = generateStageTrack(
+                    new int[]{659, 0, 784, 880, 987, 880, 784, 659, 587, 0, 659, 784, 659, 587, 494, 0},
+                    new int[]{165, 165, 247, 247, 196, 196, 147, 196}, 8, true);
+            bgmStages[4] = generateStageTrack(
+                    new int[]{698, 659, 587, 523, 698, 0, 880, 0, 784, 698, 659, 587, 523, 659, 587, 0},
+                    new int[]{147, 220, 147, 220, 175, 261, 196, 147}, 10, true);
+
+            // Chill Lo-Fi Synth BGM for the Customize Screen
+            bgmCustomize = generateStageTrack(
+                    new int[]{392, 0, 494, 0, 587, 0, 494, 0, 349, 0, 440, 0, 523, 0, 440, 0},
+                    new int[]{98, 98, 131, 131, 87, 87, 131, 131}, 4, false);
+
+            bgmLoop = bgmStages[0];
         } catch (Exception ignored) {}
+    }
+
+    private Sound generateDoorSlamSound() throws Exception {
+        int sampleRate = 22050;
+        int numSamples = (int) (sampleRate * 0.35f);
+        byte[] pcm = new byte[numSamples * 2];
+        for (int i = 0; i < numSamples; i++) {
+            double p = (double) i / numSamples;
+            double env = Math.pow(1.0 - p, 1.8);
+            double thud = Math.sin(2.0 * Math.PI * (95.0 - 55.0 * p) * i / sampleRate) * 18000;
+            double clang = ((Math.random() - 0.5) * 9000) * Math.exp(-p * 6.0);
+            short val = (short) Math.max(-32000, Math.min(32000, (thud + clang) * env));
+            pcm[i * 2] = (byte) (val & 0xff);
+            pcm[i * 2 + 1] = (byte) ((val >> 8) & 0xff);
+        }
+        return loadSoundFromPcm(pcm, sampleRate);
+    }
+
+    private Sound generateJingle(int[] notes, float noteDurationSec) throws Exception {
+        int sampleRate = 22050;
+        int samplesPerNote = (int) (sampleRate * noteDurationSec);
+        byte[] pcm = new byte[notes.length * samplesPerNote * 2];
+        for (int n = 0; n < notes.length; n++) {
+            int freq = notes[n];
+            for (int i = 0; i < samplesPerNote; i++) {
+                int idx = n * samplesPerNote + i;
+                double env = Math.max(0.05, 1.0 - ((double) i / samplesPerNote));
+                short val = (short) (Math.tanh(Math.sin(2.0 * Math.PI * freq * i / sampleRate) * 2.0) * 6500 * env);
+                pcm[idx * 2] = (byte) (val & 0xff);
+                pcm[idx * 2 + 1] = (byte) ((val >> 8) & 0xff);
+            }
+        }
+        return loadSoundFromPcm(pcm, sampleRate);
+    }
+
+    private Sound generateStageTrack(int[] melody, int[] bass, int stepsPerSec, boolean withHiHat) throws Exception {
+        int sampleRate = 22050;
+        int stepSamples = sampleRate / stepsPerSec;
+        int totalSamples = melody.length * stepSamples;
+        byte[] pcm = new byte[totalSamples * 2];
+
+        for (int step = 0; step < melody.length; step++) {
+            int melFreq = melody[step];
+            int bassFreq = bass[(step / 2) % bass.length];
+            for (int i = 0; i < stepSamples; i++) {
+                int idx = step * stepSamples + i;
+                double t = (double) i / sampleRate;
+                double env = Math.max(0.0, 1.0 - ((double) i / stepSamples));
+
+                double leadWave = (melFreq > 0) ? Math.tanh(Math.sin(2.0 * Math.PI * melFreq * t) * 1.8) * 2000 * env : 0;
+                double bassWave = Math.sin(2.0 * Math.PI * bassFreq * t) * 2200 * Math.pow(env, 0.5);
+                double hatWave = (withHiHat && step % 2 == 1 && i < stepSamples / 4) ? ((Math.random() - 0.5) * 750 * env) : 0;
+
+                short val = (short) Math.max(-32000, Math.min(32000, leadWave + bassWave + hatWave));
+                pcm[idx * 2] = (byte) (val & 0xff);
+                pcm[idx * 2 + 1] = (byte) ((val >> 8) & 0xff);
+            }
+        }
+        return loadSoundFromPcm(pcm, sampleRate);
     }
 
     private Sound generateToneSound(double startFreq, double endFreq, float durationSec) throws Exception {
@@ -215,26 +275,6 @@ public class GdxAssets {
             short val = (short) (Math.sin(2.0 * Math.PI * freq * i / sampleRate) * 14000 * env);
             pcm[i * 2] = (byte) (val & 0xff);
             pcm[i * 2 + 1] = (byte) ((val >> 8) & 0xff);
-        }
-        return loadSoundFromPcm(pcm, sampleRate);
-    }
-
-    private Sound generateBgmTrack() throws Exception {
-        int sampleRate = 22050;
-        int[] notes = {261, 329, 392, 523, 392, 329, 293, 349, 440, 587, 440, 349};
-        int samplesPerNote = sampleRate / 5;
-        int totalSamples = notes.length * samplesPerNote;
-        byte[] pcm = new byte[totalSamples * 2];
-
-        for (int n = 0; n < notes.length; n++) {
-            int freq = notes[n];
-            for (int i = 0; i < samplesPerNote; i++) {
-                int idx = n * samplesPerNote + i;
-                double env = Math.max(0.1, 1.0 - ((double) i / samplesPerNote));
-                short val = (short) (Math.sin(2.0 * Math.PI * freq * i / sampleRate) * 3500 * env);
-                pcm[idx * 2] = (byte) (val & 0xff);
-                pcm[idx * 2 + 1] = (byte) ((val >> 8) & 0xff);
-            }
         }
         return loadSoundFromPcm(pcm, sampleRate);
     }
@@ -273,6 +313,13 @@ public class GdxAssets {
         floorTileA.dispose();
         floorTileB.dispose();
         botTexture.dispose();
+        incineratorTexture.dispose();
+        forkliftTexture.dispose();
+        if (customPlayerSheet != null) customPlayerSheet.dispose();
         itemSprites.values().forEach(Texture::dispose);
+        stationSprites.values().forEach(Texture::dispose);
+        for (Texture[] arr : baySprites.values()) {
+            for (Texture t : arr) t.dispose();
+        }
     }
 }

@@ -17,6 +17,7 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
     private double vx;
     private double vy;
     private int airTimer;
+    private int spawnDropTimer = 16; // Drops from the overhead intake pipe onto the belt!
 
     protected WasteItem(String name, double startX, double startY, int lane) {
         this.name = name;
@@ -36,6 +37,11 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
         return 10;
     }
 
+    // Polymorphic hook: returns which StationType this item needs before sorting (or null if ready)
+    public StationType getRequiredStation() {
+        return null;
+    }
+
     // Default station behavior (Stateful items will override this)
     @Override
     public void applyStation(StationType station) {
@@ -46,6 +52,18 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
     public void move(double speed) {
         this.x += speed;
     }
+
+    public void moveVector(double vx, double vy) {
+        if (spawnDropTimer > 0) {
+            spawnDropTimer--;
+            return; // Wait until item finishes dropping out of the overhead pipe before rolling!
+        }
+        this.x += vx;
+        this.y += vy;
+    }
+
+    public int getSpawnDropTimer() { return spawnDropTimer; }
+    public void clearSpawnDrop() { this.spawnDropTimer = 0; }
 
     @Override
     public void draw(Graphics2D g2d) {

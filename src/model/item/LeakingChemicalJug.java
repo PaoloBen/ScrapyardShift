@@ -21,6 +21,11 @@ public class LeakingChemicalJug extends WasteItem {
     }
 
     @Override
+    public model.station.StationType getRequiredStation() {
+        return sealed ? null : model.station.StationType.NEUTRALIZER;
+    }
+
+    @Override
     public BinType getTargetBin() {
         return BinType.HAZARDOUS;
     }

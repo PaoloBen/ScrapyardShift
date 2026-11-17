@@ -47,6 +47,13 @@ public class OperatorCosmetics {
     public Color getHardhatColor() { return HARDHAT_COLORS[hardhatIndex]; }
     public Color getSuitColor() { return SUIT_COLORS[suitIndex]; }
     public Color getSkinColor() { return SKIN_TONES[skinIndex]; }
+    public void resetDefaults() {
+        this.hardhatIndex = 0;
+        this.suitIndex = 0;
+        this.skinIndex = 1;
+        this.visorIndex = 0;
+    }
+
     public String getVisorStyle() { return VISOR_STYLES[visorIndex]; }
     public int getHardhatIndex() { return hardhatIndex; }
     public int getSuitIndex() { return suitIndex; }

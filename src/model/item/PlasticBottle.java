@@ -21,6 +21,11 @@ public class PlasticBottle extends WasteItem {
     }
 
     @Override
+    public model.station.StationType getRequiredStation() {
+        return clean ? null : model.station.StationType.WASHER;
+    }
+
+    @Override
     public BinType getTargetBin() {
         return clean ? BinType.RECYCLABLE : BinType.RESIDUAL;
     }

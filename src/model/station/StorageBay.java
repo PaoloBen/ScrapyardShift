@@ -13,7 +13,16 @@ public class StorageBay implements Renderable {
     private final int baseCapacity;
     private int capacity;
     private int fillLevel;
-    private final int x, y;
+    private int x, y;
+    private boolean beingHauled = false;
+
+    public boolean isBeingHauled() { return beingHauled; }
+    public void setBeingHauled(boolean hauled) { this.beingHauled = hauled; }
+
+    public void setPosition(int newX, int newY) {
+        this.x = newX;
+        this.y = newY;
+    }
 
     public StorageBay(BinType type, int capacity, int x, int y) {
         this.type = type;

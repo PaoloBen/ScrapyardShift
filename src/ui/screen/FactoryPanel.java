@@ -254,8 +254,8 @@ public class FactoryPanel extends JPanel {
         }
 
         // Draw Forklift Dispatch Lever Station
-        int fx = GameController.FORKLIFT_X;
-        int fy = GameController.FORKLIFT_Y;
+        int fx = controller.getForkliftX();
+        int fy = controller.getForkliftY();
         g2d.setColor(new Color(243, 156, 18));
         g2d.fillRoundRect(fx, fy, 105, 70, 10, 10);
         g2d.setColor(Color.BLACK);
