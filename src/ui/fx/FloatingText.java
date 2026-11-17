@@ -24,6 +24,12 @@ public class FloatingText {
         return life <= 0;
     }
 
+    public String getText() { return text; }
+    public double getX() { return x; }
+    public double getY() { return y; }
+    public Color getColor() { return color; }
+    public float getAlpha() { return Math.max(0f, Math.min(1f, (float) life / MAX_LIFE)); }
+
     public void draw(Graphics2D g2d) {
         int alpha = (int) (255 * ((double) life / MAX_LIFE));
         alpha = Math.max(0, Math.min(255, alpha));

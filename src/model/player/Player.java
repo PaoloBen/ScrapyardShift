@@ -10,6 +10,8 @@ import java.awt.*;
 public class Player implements Renderable {
     private String name;
     private int score;
+    private int credits = 0;
+    private double speedMultiplier = 1.0;
     private final ComplianceMeter complianceMeter;
     private final StreakMeter streakMeter;
     private final OperatorCosmetics cosmetics;
@@ -65,7 +67,7 @@ public class Player implements Renderable {
         this.throwDx = dx / length;
         this.throwDy = dy / length;
 
-        double speed = (dashTimer > 0) ? 8.5 : 4.2;
+        double speed = ((dashTimer > 0) ? 8.5 : 4.2) * speedMultiplier;
         double nextX = Math.max(minX, Math.min(maxX, this.x + this.throwDx * speed));
         double nextY = Math.max(minY, Math.min(maxY, this.y + this.throwDy * speed));
 
@@ -191,11 +193,13 @@ public class Player implements Renderable {
     // Score & Meter logic
     public void addScore(int basePoints) {
         this.score += basePoints + streakMeter.getBonus();
+        this.credits += 15 + streakMeter.getBonus();
         this.streakMeter.change(1);
     }
 
     public void addScore(int basePoints, int preprocessBonus) {
         this.score += basePoints + preprocessBonus + streakMeter.getBonus();
+        this.credits += 30 + streakMeter.getBonus();
         this.streakMeter.change(1);
     }
 
@@ -221,5 +225,39 @@ public class Player implements Renderable {
     public void setHeldItem(WasteItem item) {
         this.heldItem = item;
         syncHeldItemPosition();
+    }
+
+    // Aims throw trajectory toward the mouse cursor / touch point
+    public void aimAt(double targetX, double targetY) {
+        double dx = targetX - this.x;
+        double dy = targetY - this.y;
+        double len = Math.hypot(dx, dy);
+        if (len > 1.0) {
+            this.throwDx = dx / len;
+            this.throwDy = dy / len;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+                this.facing = dx > 0 ? Direction.RIGHT : Direction.LEFT;
+            } else {
+                this.facing = dy > 0 ? Direction.DOWN : Direction.UP;
+            }
+            syncHeldItemPosition();
+        }
+    }
+
+    public int getCredits() { return credits; }
+    public void setCredits(int credits) { this.credits = Math.max(0, credits); }
+    public void addCredits(int amount) { this.credits += amount; }
+    public double getWalkCycle() { return walkCycle; }
+    public boolean spendCredits(int cost) {
+        if (this.credits >= cost) {
+            this.credits -= cost;
+            return true;
+        }
+        return false;
+    }
+    public void setSpeedMultiplier(double mult) { this.speedMultiplier = mult; }
+    public void resetUpgrades() {
+        this.credits = 0;
+        this.speedMultiplier = 1.0;
     }
 }

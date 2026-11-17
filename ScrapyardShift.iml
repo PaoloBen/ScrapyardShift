@@ -7,5 +7,7 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="badlogicgames.gdx.backend.lwjgl3" level="project" />
+    <orderEntry type="library" name="gdx-platform-1.12.1-natives-desktop" level="project" />
   </component>
 </module>

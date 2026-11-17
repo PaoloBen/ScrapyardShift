@@ -21,6 +21,8 @@ public class GameController {
     private final List<WasteItem> thrownItems = new ArrayList<>();
     private final List<FloatingText> popups;
     private final List<String> mistakeLog;
+    private final model.bot.CleanerBot cleanerBot = new model.bot.CleanerBot(600, 280);
+    private final model.shop.UpgradeShop shop = new model.shop.UpgradeShop();
 
     private String lastFeedback;
     private int spawnTimer;
@@ -55,6 +57,7 @@ public class GameController {
         this.gameWon = false;
 
         initFacility();
+        model.save.SaveManager.load(this);
     }
 
     private void initFacility() {
@@ -77,6 +80,14 @@ public class GameController {
 
         // 1. Move Player Avatar (minY is 95 so player can reach the top Biodegradable Bay!)
         player.move(moveDx, moveDy, 40, 700, 95, 450);
+
+        // 1c. Tick Assistant CleanerBot AI
+        String botSorted = cleanerBot.updateAI(thrownItems, beltItems, bays);
+        if (botSorted != null) {
+            player.addScore(10 * getCurrentLevel().getLevelNumber());
+            popups.add(new FloatingText("BOT SORTED!", cleanerBot.getX() - 20, cleanerBot.getY() - 20, Color.CYAN));
+            lastFeedback = "CleanerBot sorted " + botSorted + "!";
+        }
 
         // 1b. Update Thrown / Floor Items
         Iterator<WasteItem> thrownIt = thrownItems.iterator();
@@ -167,17 +178,15 @@ public class GameController {
         double py = player.getY();
         WasteItem held = player.getHeldItem();
 
-        // CASE A: Player is holding an item
+        // CASE A: Holding an item -> Place if right next to a Bay/Station, otherwise THROW!
         if (held != null) {
-            // 1. Standing near the right-side Storage Bays?
-            if (px >= 635) {
+            if (px >= 645) {
                 BinType targetType = getClosestBayType(py);
                 handleRoute(held, bays.get(targetType));
                 player.setHeldItem(null);
                 return;
             }
 
-            // 2. Standing near a bottom WorkStation?
             for (WorkStation station : stations) {
                 if (station.isNear(px, py) && station.isEmpty()) {
                     station.placeItem(held);
@@ -187,21 +196,17 @@ public class GameController {
                 }
             }
 
-            // 3. Standing near the top Intake Belt? Put item back on belt
-            if (py <= 215 && px <= BELT_END_X) {
-                held.setPosition(px - 30, LANE_Y);
-                beltItems.add(held);
-                player.setHeldItem(null);
-                lastFeedback = "Placed item back onto conveyor belt.";
-                return;
-            }
-
-            lastFeedback = "Walk closer to a Machine (bottom) or Sorting Bay (right) to place item!";
+            // Not adjacent to an empty station or bay -> THROW in aim direction!
+            player.setHeldItem(null);
+            held.setPosition(px - 48, py - 20);
+            held.launch(player.getThrowDx() * 13.0, player.getThrowDy() * 13.0);
+            thrownItems.add(held);
+            popups.add(new FloatingText("THROW!", px, py - 25, Color.WHITE));
+            lastFeedback = "Threw " + held.getDisplayTag() + "!";
             return;
         }
 
-        // CASE B: Player's hands are empty
-        // 1. Standing near the Forklift Dispatch Terminal?
+        // CASE B: Hands are empty -> Forklift, Station Pickup/Boost, Floor Pickup, or Belt Grab
         if (Math.hypot((FORKLIFT_X + 45) - px, (FORKLIFT_Y + 30) - py) <= 75) {
             bays.values().forEach(StorageBay::empty);
             popups.add(new FloatingText("BAYS CLEARED!", FORKLIFT_X, FORKLIFT_Y - 10, Color.CYAN));
@@ -209,18 +214,32 @@ public class GameController {
             return;
         }
 
-        // 2. Standing near a WorkStation with an item inside?
         for (WorkStation station : stations) {
             if (station.isNear(px, py) && !station.isEmpty()) {
-                WasteItem item = station.removeItem();
-                player.setHeldItem(item);
-                lastFeedback = "Picked up " + item.getDisplayTag() + " from " + station.getType().name();
+                if (station.isFinished()) {
+                    WasteItem item = station.removeItem();
+                    player.setHeldItem(item);
+                    lastFeedback = "Picked up processed " + item.getDisplayTag() + "!";
+                } else {
+                    station.boostProcess();
+                    popups.add(new FloatingText("BOOST!", station.getX() + 30, station.getY() - 5, Color.YELLOW));
+                }
                 return;
             }
         }
 
-        // 3. Standing near the Intake Belt? Grab closest item
-        if (py <= 220) {
+        Iterator<WasteItem> floorIt = thrownItems.iterator();
+        while (floorIt.hasNext()) {
+            WasteItem item = floorIt.next();
+            if (!item.isAirborne() && Math.hypot((item.getX() + 48) - px, (item.getY() + 20) - py) <= 75) {
+                floorIt.remove();
+                player.setHeldItem(item);
+                lastFeedback = "Picked up " + item.getDisplayTag() + " off the floor!";
+                return;
+            }
+        }
+
+        if (py <= 225) {
             WasteItem closest = null;
             double bestDist = 85;
             for (WasteItem item : beltItems) {
@@ -233,19 +252,7 @@ public class GameController {
             if (closest != null) {
                 beltItems.remove(closest);
                 player.setHeldItem(closest);
-                lastFeedback = "Grabbed " + closest.getDisplayTag() + "! Carry to a station or right-side bay.";
-            }
-        }
-
-        // 4. Pick up any thrown item lying on the factory floor
-        Iterator<WasteItem> floorIt = thrownItems.iterator();
-        while (floorIt.hasNext()) {
-            WasteItem item = floorIt.next();
-            if (!item.isAirborne() && Math.hypot((item.getX() + 48) - px, (item.getY() + 20) - py) <= 75) {
-                floorIt.remove();
-                player.setHeldItem(item);
-                lastFeedback = "Picked up " + item.getDisplayTag() + " off the floor!";
-                return;
+                lastFeedback = "Grabbed " + closest.getDisplayTag() + "! Press [SPACE/E] or Click to Place/Throw.";
             }
         }
     }
@@ -286,6 +293,7 @@ public class GameController {
             int mult = getCurrentLevel().getLevelNumber();
 
             if (item.getTargetBin() == bay.getType()) {
+                model.save.SaveManager.save(this);
                 if (item.isPreprocessed()) {
                     int pts = 10 * mult + 15;
                     player.addScore(10 * mult, 15);
@@ -336,18 +344,24 @@ public class GameController {
         this.currentLevelIndex = 0;
         this.spawnTimer = 0;
         this.beltItems.clear();
+        this.thrownItems.clear(); // Fixes thrown items persisting after [R]!
         this.popups.clear();
         this.mistakeLog.clear();
         this.stations.forEach(WorkStation::clear);
         this.bays.values().forEach(StorageBay::empty);
+        this.cleanerBot.reset();
+        this.player.setHeldItem(null);
         this.player.resetScore();
         this.player.resetPosition(400, 270);
         this.player.getComplianceMeter().reset(100);
         this.player.getStreakMeter().reset(0);
         this.gameOver = false;
         this.gameWon = false;
-        this.lastFeedback = "Shift restarted! Grab items off the top belt with [SPACE].";
+        this.lastFeedback = "Shift restarted! Grab items off the top belt with [SPACE/E] or Click.";
     }
+
+    public model.bot.CleanerBot getCleanerBot() { return cleanerBot; }
+    public model.shop.UpgradeShop getShop() { return shop; }
 
     public Player getPlayer() { return player; }
     public FacilityLevel getCurrentLevel() { return levels.get(currentLevelIndex); }

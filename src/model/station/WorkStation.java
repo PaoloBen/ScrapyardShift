@@ -126,4 +126,6 @@ public class WorkStation implements Renderable {
     public StationType getType() { return type; }
     public double getX() { return x; }
     public double getY() { return y; }
+    public WasteItem getStoredItem() { return storedItem; }
+    public float getProgressRatio() { return (float) progress / MAX_PROGRESS; }
 }

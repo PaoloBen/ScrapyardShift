@@ -48,5 +48,15 @@ public class OperatorCosmetics {
     public Color getSuitColor() { return SUIT_COLORS[suitIndex]; }
     public Color getSkinColor() { return SKIN_TONES[skinIndex]; }
     public String getVisorStyle() { return VISOR_STYLES[visorIndex]; }
+    public int getHardhatIndex() { return hardhatIndex; }
+    public int getSuitIndex() { return suitIndex; }
+    public int getSkinIndex() { return skinIndex; }
     public int getVisorIndex() { return visorIndex; }
+
+    public void setSavedIndices(int hardhat, int suit, int skin, int visor) {
+        this.hardhatIndex = Math.max(0, hardhat % HARDHAT_COLORS.length);
+        this.suitIndex = Math.max(0, suit % SUIT_COLORS.length);
+        this.skinIndex = Math.max(0, skin % SKIN_TONES.length);
+        this.visorIndex = Math.max(0, visor % VISOR_STYLES.length);
+    }
 }
