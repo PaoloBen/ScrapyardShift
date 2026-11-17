@@ -465,9 +465,9 @@ public class ScrapyardGdxGame extends ApplicationAdapter {
         FacilityLevel lvl = controller.getCurrentLevel();
 
         assets.fontMedium.setColor(Color.BLACK);
-        assets.fontMedium.draw(batch, lvl.getTitle() + " (Goal: " + lvl.getTargetScore() + ")", 16, V_HEIGHT - 8);
-        assets.fontMedium.draw(batch, "Score: " + p.getScore() + "  |  $" + p.getCredits() + "  |  Streak: x" + p.getStreakMeter().getValue(), 365, V_HEIGHT - 8);
-        assets.fontMedium.draw(batch, "Compliance: " + p.getComplianceMeter().getValue() + "%", 725, V_HEIGHT - 8);
+        assets.fontMedium.draw(batch, lvl.getTitle() + " (" + lvl.getTargetScore() + ")", 16, V_HEIGHT - 8);
+        assets.fontMedium.draw(batch, "Score: " + p.getScore() + " | $" + p.getCredits() + " | Streak: x" + p.getStreakMeter().getValue(), 415, V_HEIGHT - 8);
+        assets.fontMedium.draw(batch, "Compliance: " + p.getComplianceMeter().getValue() + "%", 730, V_HEIGHT - 8);
 
         drawBox(16, 30, 868, 21, new Color(0.96f, 0.96f, 0.98f, 1f), Color.DARK_GRAY);
         assets.fontSmall.setColor(Color.BLACK);
@@ -546,10 +546,14 @@ public class ScrapyardGdxGame extends ApplicationAdapter {
     private void drawWasteItem(WasteItem item) {
         float ix = (float) item.getX();
         float iy = (float) item.getY();
+
+        // Draw floor shadow if the item is currently flying through the air
+        if (item.isAirborne()) {
+            drawBox(ix + 8, iy + 28, 36, 10, new Color(0f, 0f, 0f, 0.35f), new Color(0f, 0f, 0f, 0f));
+        }
+
         batch.setColor(Color.WHITE);
         batch.draw(assets.getItemSprite(item.getDisplayTag()), ix, V_HEIGHT - iy - 40);
-        assets.fontSmall.setColor(Color.BLACK);
-        assets.fontSmall.draw(batch, item.getDisplayTag(), ix + 34, V_HEIGHT - iy - 14);
     }
 
     private void drawPlayerAvatar(float px, float py, float scale) {

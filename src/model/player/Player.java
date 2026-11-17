@@ -97,8 +97,8 @@ public class Player implements Renderable {
 
     public void syncHeldItemPosition() {
         if (heldItem != null) {
-            double offsetX = facing.getDx() * 34 - 48;
-            double offsetY = (facing == Direction.UP) ? -52 : (facing.getDy() * 24 - 10);
+            double offsetX = facing.getDx() * 24 - 20;
+            double offsetY = (facing == Direction.UP) ? -48 : (facing.getDy() * 22 - 14);
             heldItem.setPosition(this.x + offsetX, this.y + offsetY);
         }
     }
