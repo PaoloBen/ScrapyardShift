@@ -5,7 +5,7 @@ import model.item.WasteItem;
 
 public class HarborLevel extends FacilityLevel {
     public HarborLevel() {
-        super(4, "Shift 4: Cebu Harbor Pier", 700, 4.0);
+        super(4, "Harbor Pier Terminal", 700, 4.0);
     }
 
     @Override

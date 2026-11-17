@@ -7,7 +7,7 @@ public class TyphoonLevel extends FacilityLevel {
     private boolean surgeActive = false;
 
     public TyphoonLevel() {
-        super(3, "Shift 3: Typhoon Surge", 450, 3.6);
+        super(3, "Storm Surge MRF", 450, 3.6);
     }
 
     @Override

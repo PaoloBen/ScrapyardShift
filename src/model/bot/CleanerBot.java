@@ -39,6 +39,10 @@ public class CleanerBot implements Movable {
     private int stuckTicks = 0;
     private double escapeAngle = 0;
     private int escapeTicks = 0;
+    private int actionCooldown = 0; // 30 ticks (0.5s at 60 FPS) between grabs and placements
+
+    public boolean canUseMachines() { return level >= 4; }
+    public boolean canUseForklift() { return level >= 7; }
 
     public CleanerBot(double startX, double startY) {
         this.x = startX;
@@ -60,9 +64,14 @@ public class CleanerBot implements Movable {
                               boolean horizontalBelt, int forkliftX, int forkliftY,
                               CollisionSensor sensor) {
         if (level <= 0) return null;
-        double speed = 2.2 + (level * 0.95);
-        this.animTick += 0.28;
+        // Lv.1 starts super slow (0.73 px/tick) and scales up to 3.25 px/tick at Lv.10
+        double speed = 0.45 + (level * 0.28);
+        this.animTick += 0.08 + (level * 0.025);
         this.moving = false;
+
+        if (actionCooldown > 0) {
+            actionCooldown--;
+        }
 
         if (sensor != null && sensor.isBlocked(this.x, this.y)) {
             nudgeOutOfObstacle(sensor);
@@ -72,16 +81,18 @@ public class CleanerBot implements Movable {
         if (heldItem != null) {
             StationType neededStation = heldItem.getRequiredStation();
 
-            if (neededStation != null) {
+            // Lv.4+ required to load items into processing machines!
+            if (neededStation != null && canUseMachines()) {
                 WorkStation targetStation = findEmptyStation(stations, neededStation);
                 if (targetStation != null) {
                     double sx = targetStation.getX() + 42;
                     double sy = targetStation.getY() + 36;
                     double[] stand = getBestApproachPoint(sx, sy, 56, sensor);
                     boolean arrived = navigateTowards(stand[0], stand[1], speed, sensor);
-                    if (arrived || Math.hypot(sx - x, sy - y) <= 92) {
+                    if ((arrived || Math.hypot(sx - x, sy - y) <= 92) && actionCooldown <= 0) {
                         targetStation.placeItem(heldItem);
                         heldItem = null;
+                        actionCooldown = 30; // 0.5s cooldown after placing
                     } else if (heldItem != null) {
                         syncHeldPosition();
                     }
@@ -93,7 +104,8 @@ public class CleanerBot implements Movable {
             StorageBay bay = bays.get(targetBin);
             if (bay != null && !bay.isBeingHauled()) {
                 if (bay.isFull()) {
-                    if (Math.hypot((forkliftX + 46) - x, (forkliftY + 36) - y) > 115) {
+                    // Lv.7+ required to wake & dispatch the Forklift!
+                    if (canUseForklift() && Math.hypot((forkliftX + 46) - x, (forkliftY + 36) - y) > 115) {
                         double[] fkStand = getBestApproachPoint(forkliftX + 46, forkliftY + 36, 78, sensor);
                         navigateTowards(fkStand[0], fkStand[1], speed, sensor);
                     }
@@ -105,9 +117,10 @@ public class CleanerBot implements Movable {
                 double by = bay.getY() + 36;
                 double[] binStand = getBestApproachPoint(bx, by, 58, sensor);
                 boolean arrived = navigateTowards(binStand[0], binStand[1], speed, sensor);
-                if (arrived || Math.hypot(bx - x, by - y) <= 94) {
+                if ((arrived || Math.hypot(bx - x, by - y) <= 94) && actionCooldown <= 0) {
                     WasteItem delivered = heldItem;
                     heldItem = null;
+                    actionCooldown = 30; // 0.5s cooldown after sorting into a bin
                     return delivered;
                 }
             }
@@ -115,40 +128,45 @@ public class CleanerBot implements Movable {
             return null;
         }
 
-        // STATE 2: Hands empty -> Priority 1: Pick up the CLOSEST finished item from WorkStations
-        WorkStation closestFinishedWs = null;
-        double bestWsDist = Double.MAX_VALUE;
-        for (WorkStation ws : stations) {
-            if (ws.isFinished() && !ws.isBroken()) {
-                double d = Math.hypot((ws.getX() + 42) - x, (ws.getY() + 36) - y);
-                if (d < bestWsDist) {
-                    bestWsDist = d;
-                    closestFinishedWs = ws;
+        // STATE 2: Hands empty -> Priority 1 (Lv.4+ Only): Pick up the CLOSEST finished item from WorkStations
+        if (canUseMachines()) {
+            WorkStation closestFinishedWs = null;
+            double bestWsDist = Double.MAX_VALUE;
+            for (WorkStation ws : stations) {
+                if (ws.isFinished() && !ws.isBroken()) {
+                    double d = Math.hypot((ws.getX() + 42) - x, (ws.getY() + 36) - y);
+                    if (d < bestWsDist) {
+                        bestWsDist = d;
+                        closestFinishedWs = ws;
+                    }
                 }
             }
-        }
-        if (closestFinishedWs != null) {
-            double sx = closestFinishedWs.getX() + 42;
-            double sy = closestFinishedWs.getY() + 36;
-            double[] stand = getBestApproachPoint(sx, sy, 56, sensor);
-            boolean arrived = (bestWsDist <= 92) || navigateTowards(stand[0], stand[1], speed, sensor);
-            if (arrived || Math.hypot(sx - x, sy - y) <= 96) {
-                this.heldItem = closestFinishedWs.removeItem();
-                if (this.heldItem != null) {
-                    this.heldItem.clearSpawnDrop();
-                    syncHeldPosition();
+            if (closestFinishedWs != null) {
+                double sx = closestFinishedWs.getX() + 42;
+                double sy = closestFinishedWs.getY() + 36;
+                double[] stand = getBestApproachPoint(sx, sy, 56, sensor);
+                boolean arrived = navigateTowards(stand[0], stand[1], speed, sensor);
+                if ((arrived || bestWsDist <= 92 || Math.hypot(sx - x, sy - y) <= 96) && actionCooldown <= 0) {
+                    this.heldItem = closestFinishedWs.removeItem();
+                    if (this.heldItem != null) {
+                        this.heldItem.clearSpawnDrop();
+                        syncHeldPosition();
+                        actionCooldown = 30; // 0.5s cooldown after grabbing
+                    }
                 }
+                return null;
             }
-            return null;
         }
 
-        // Priority 2: Find the single CLOSEST trash item across both the Floor and the Conveyor Belt
+        // Priority 2: Find the single CLOSEST eligible trash item across both the Floor and the Conveyor Belt
+        // (At Lv.1-3, the bot only grabs ready-to-sort items; at Lv.4+, it also grabs raw items that need processing!)
         WasteItem closestTrash = null;
         boolean targetIsOnFloor = false;
         double bestTrashDist = Double.MAX_VALUE;
 
         for (WasteItem item : floorItems) {
             if (!item.isAirborne()) {
+                if (!canUseMachines() && item.getRequiredStation() != null) continue;
                 double d = Math.hypot((item.getX() + 23) - x, (item.getY() + 23) - y);
                 if (d < bestTrashDist) {
                     bestTrashDist = d;
@@ -160,6 +178,7 @@ public class CleanerBot implements Movable {
 
         for (WasteItem item : beltItems) {
             if (item.getSpawnDropTimer() <= 0) {
+                if (!canUseMachines() && item.getRequiredStation() != null) continue;
                 double d = Math.hypot((item.getX() + 23) - x, (item.getY() + 23) - y);
                 if (d < bestTrashDist) {
                     bestTrashDist = d;
@@ -172,22 +191,12 @@ public class CleanerBot implements Movable {
         if (closestTrash != null) {
             double ix = closestTrash.getX() + 23;
             double iy = closestTrash.getY() + 23;
-
-            if (bestTrashDist <= 86) {
-                if (targetIsOnFloor) {
-                    floorItems.remove(closestTrash);
-                } else {
-                    beltItems.remove(closestTrash);
-                }
-                this.heldItem = closestTrash;
-                this.heldItem.clearSpawnDrop();
-                syncHeldPosition();
-                return null;
-            }
-
             double standRadius = targetIsOnFloor ? 28 : 52;
             double[] stand = getBestApproachPoint(ix, iy, standRadius, sensor);
-            if (navigateTowards(stand[0], stand[1], speed, sensor) || Math.hypot(ix - x, iy - y) <= 90) {
+
+            // Always navigate towards the item even while actionCooldown > 0 so movement never freezes!
+            boolean arrived = (bestTrashDist <= 86) || navigateTowards(stand[0], stand[1], speed, sensor);
+            if ((arrived || Math.hypot(ix - x, iy - y) <= 90) && actionCooldown <= 0) {
                 if (targetIsOnFloor) {
                     floorItems.remove(closestTrash);
                 } else {
@@ -196,16 +205,19 @@ public class CleanerBot implements Movable {
                 this.heldItem = closestTrash;
                 this.heldItem.clearSpawnDrop();
                 syncHeldPosition();
+                actionCooldown = 30; // 0.5s cooldown after grabbing
             }
             return null;
         }
 
-        // Priority 3: If any bin is full while idle, go trigger the Forklift!
-        for (StorageBay bay : bays.values()) {
-            if (bay.isFull() && !bay.isBeingHauled()) {
-                double[] fkStand = getBestApproachPoint(forkliftX + 46, forkliftY + 36, 60, sensor);
-                navigateTowards(fkStand[0], fkStand[1], speed, sensor);
-                return null;
+        // Priority 3 (Lv.7+ Only): If any bin is full while idle, go wake the Forklift driver!
+        if (canUseForklift()) {
+            for (StorageBay bay : bays.values()) {
+                if (bay.isFull() && !bay.isBeingHauled()) {
+                    double[] fkStand = getBestApproachPoint(forkliftX + 46, forkliftY + 36, 60, sensor);
+                    navigateTowards(fkStand[0], fkStand[1], speed, sensor);
+                    return null;
+                }
             }
         }
 
@@ -288,7 +300,7 @@ public class CleanerBot implements Movable {
             return true;
         }
 
-        if (Math.hypot(this.x - lastX, this.y - lastY) < 0.5) {
+        if (Math.hypot(this.x - lastX, this.y - lastY) < speed * 0.35) {
             stuckTicks++;
             if (stuckTicks >= 5 && escapeTicks <= 0 && sensor != null) {
                 escapeAngle = findMostOpenDirection(sensor);
@@ -506,11 +518,12 @@ public class CleanerBot implements Movable {
         this.moving = false;
         this.stuckTicks = 0;
         this.escapeTicks = 0;
+        this.actionCooldown = 0;
     }
 
     public int getLevel() { return level; }
-    public void setLevel(int level) { this.level = Math.max(0, Math.min(3, level)); }
-    public void upgrade() { if (level < 3) level++; }
+    public void setLevel(int level) { this.level = Math.max(0, Math.min(10, level)); }
+    public void upgrade() { if (level < 10) level++; }
     public double getX() { return x; }
     public double getY() { return y; }
     public double getFacingDx() { return facingDx; }

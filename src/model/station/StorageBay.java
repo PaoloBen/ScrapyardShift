@@ -13,6 +13,8 @@ public class StorageBay implements Renderable {
     private final int baseCapacity;
     private int capacity;
     private int fillLevel;
+    private int validHaulUnits;
+    private int wrongItemCount;
     private int x, y;
     private boolean beingHauled = false;
 
@@ -29,6 +31,8 @@ public class StorageBay implements Renderable {
         this.baseCapacity = capacity;
         this.capacity = capacity;
         this.fillLevel = 0;
+        this.validHaulUnits = 0;
+        this.wrongItemCount = 0;
         this.x = x;
         this.y = y;
     }
@@ -37,11 +41,22 @@ public class StorageBay implements Renderable {
         if (isFull()) {
             throw new BinFullException(this.type);
         }
+        // Always takes up 1 physical slot in the bin (even if it's the wrong bin!)
         this.fillLevel++;
+
+        // Only count toward Forklift Haul if placed in the CORRECT bin
+        if (item.getTargetBin() == this.type) {
+            // Personally processed items yield 4x the haul value of default unprocessed items!
+            this.validHaulUnits += item.isPersonallyProcessed() ? 4 : 1;
+        } else {
+            this.wrongItemCount++;
+        }
     }
 
     public void empty() {
         this.fillLevel = 0;
+        this.validHaulUnits = 0;
+        this.wrongItemCount = 0;
     }
 
     public boolean isFull() {
@@ -50,6 +65,8 @@ public class StorageBay implements Renderable {
 
     public BinType getType() { return type; }
     public int getFillLevel() { return fillLevel; }
+    public int getValidHaulUnits() { return validHaulUnits; }
+    public int getWrongItemCount() { return wrongItemCount; }
     public int getCapacity() { return capacity; }
     public void increaseCapacity(int extra) {
         this.capacity += extra;
@@ -58,6 +75,8 @@ public class StorageBay implements Renderable {
     public void resetCapacity() {
         this.capacity = this.baseCapacity;
         this.fillLevel = 0;
+        this.validHaulUnits = 0;
+        this.wrongItemCount = 0;
     }
 
     public int getX() { return x; }

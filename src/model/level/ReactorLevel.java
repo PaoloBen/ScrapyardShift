@@ -5,7 +5,7 @@ import model.item.WasteItem;
 
 public class ReactorLevel extends FacilityLevel {
     public ReactorLevel() {
-        super(5, "Shift 5: Mactan Hazmat Core", 1000, 4.5);
+        super(5, "Hazmat Reactor Core", 1000, 4.5);
     }
 
     @Override

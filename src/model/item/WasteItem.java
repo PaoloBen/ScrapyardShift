@@ -126,8 +126,18 @@ public abstract class WasteItem implements Movable, Processable, Renderable {
         return airTimer > 0;
     }
 
+    private boolean personallyProcessed = false;
+
     public boolean isPreprocessed() { return preprocessed; }
-    protected void setPreprocessed(boolean preprocessed) { this.preprocessed = preprocessed; }
+    protected void setPreprocessed(boolean preprocessed) {
+        this.preprocessed = preprocessed;
+        if (preprocessed) {
+            this.personallyProcessed = true;
+        }
+    }
+
+    public boolean isPersonallyProcessed() { return personallyProcessed; }
+    public void markPersonallyProcessed() { this.personallyProcessed = true; }
 
     @Override
     public String toString() {

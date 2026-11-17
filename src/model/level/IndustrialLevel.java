@@ -5,7 +5,7 @@ import model.item.WasteItem;
 
 public class IndustrialLevel extends FacilityLevel {
     public IndustrialLevel() {
-        super(2, "Shift 2: Mandaue Hub", 250, 3.0);
+        super(2, "Industrial Factory Hub", 250, 3.0);
     }
 
     @Override

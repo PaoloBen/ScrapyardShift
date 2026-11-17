@@ -13,7 +13,8 @@ public abstract class FacilityLevel {
 
     protected FacilityLevel(int levelNumber, String title, int targetScore, double beltSpeed) {
         this.levelNumber = levelNumber;
-        this.title = title;
+        // Strip any "Shift X: " prefix so levels use pure location names!
+        this.title = title != null ? title.replaceFirst("^Shift\\s+\\d+:\\s*", "") : "MRF Facility";
         this.targetScore = targetScore;
         this.beltSpeed = beltSpeed;
     }
@@ -27,7 +28,7 @@ public abstract class FacilityLevel {
 
     // [StartX, StartY, EndX, EndY]
     public int[] getBeltLayout() {
-        return new int[]{ 80, 120, 500, 120 }; // Shift 1: Left-to-Right
+        return new int[]{ 80, 120, 500, 120 };
     }
 
     // [BioX, BioY,  RecX, RecY,  ResX, ResY,  HazX, HazY]
@@ -39,9 +40,10 @@ public abstract class FacilityLevel {
         return currentScore >= targetScore;
     }
 
-    // Number of trash items that must be cleared from FULL bins via the Forklift to finish the shift!
+    // Base quota starts at 16 on Level 1 and increases exponentially across all 20 levels!
     public int getTrashQuota() {
-        return 4 + (levelNumber * 4);
+        int raw = (int) Math.round(16.0 * Math.pow(1.16, levelNumber - 1));
+        return (raw % 2 == 0) ? raw : raw + 1;
     }
 
     public boolean isQuotaMet(int transportedTrashCount) {

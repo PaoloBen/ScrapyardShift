@@ -40,9 +40,15 @@ public class GdxAssets {
     public Sound sfxVictoryFanfare;
     public Sound sfxGameOverTrack;
 
-    public final Sound[] bgmStages = new Sound[5];
+    public final Sound[] bgmStages = new Sound[20];
+    public Sound bgmMenu;
     public Sound bgmCustomize;
     public Sound bgmLoop;
+
+    @FunctionalInterface
+    private interface SoundSupplier {
+        Sound get() throws Exception;
+    }
 
     public GdxAssets() {
         fontSmall = new BitmapFont();
@@ -88,7 +94,28 @@ public class GdxAssets {
         }
 
         buildCustomItemSprites();
-        buildProceduralAudio();
+        buildAudioWithOggOverride();
+    }
+
+    // Checks src/assets/audio/<baseName>.ogg (or .wav/.mp3) first so you can drop in custom audio files anytime!
+    private Sound loadCustomOrGenerate(String baseName, SoundSupplier fallback) {
+        String[] folders = { "src/assets/audio/", "assets/audio/", "src/assets/", "assets/" };
+        String[] exts = { ".ogg", ".wav", ".mp3" };
+        for (String dir : folders) {
+            for (String ext : exts) {
+                FileHandle fh = Gdx.files.local(dir + baseName + ext);
+                if (fh.exists()) {
+                    try {
+                        return Gdx.audio.newSound(fh);
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        try {
+            return fallback.get();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Texture createSolidTexture(int w, int h, Color c) {
@@ -167,41 +194,59 @@ public class GdxAssets {
         return itemSprites.getOrDefault(tag, whitePixel);
     }
 
-    private void buildProceduralAudio() {
-        try {
-            sfxGrab = generateToneSound(520, 680, 0.08f);
-            sfxThrow = generateToneSound(700, 280, 0.14f);
-            sfxSuccess = generateToneSound(440, 880, 0.18f);
-            sfxError = generateToneSound(220, 110, 0.28f);
-            sfxClick = generateToneSound(800, 900, 0.04f);
-            sfxDoorSlam = generateDoorSlamSound();
-            sfxVictoryFanfare = generateJingle(new int[]{523, 659, 784, 1046, 784, 1046}, 0.14f);
-            sfxGameOverTrack = generateJingle(new int[]{392, 370, 349, 330, 293, 261}, 0.20f);
+    private void buildAudioWithOggOverride() {
+        FileHandle audioDir = Gdx.files.local("src/assets/audio");
+        if (!audioDir.exists()) audioDir.mkdirs();
 
-            // 5 Unique Stage BGM Tracks (Different keys, tempos, and melodies for each shift!)
-            bgmStages[0] = generateStageTrack(
-                    new int[]{523, 0, 659, 587, 523, 659, 784, 0, 698, 0, 659, 587, 523, 587, 659, 0},
-                    new int[]{131, 131, 196, 196, 175, 175, 131, 196}, 7, true);
-            bgmStages[1] = generateStageTrack(
-                    new int[]{440, 523, 659, 0, 587, 523, 440, 0, 392, 440, 523, 587, 659, 0, 587, 0},
-                    new int[]{110, 110, 165, 165, 147, 147, 110, 165}, 8, true);
-            bgmStages[2] = generateStageTrack(
-                    new int[]{587, 698, 880, 0, 784, 698, 659, 0, 587, 659, 698, 784, 880, 0, 784, 659},
-                    new int[]{147, 147, 220, 220, 175, 175, 196, 196}, 9, true);
-            bgmStages[3] = generateStageTrack(
-                    new int[]{659, 0, 784, 880, 987, 880, 784, 659, 587, 0, 659, 784, 659, 587, 494, 0},
-                    new int[]{165, 165, 247, 247, 196, 196, 147, 196}, 8, true);
-            bgmStages[4] = generateStageTrack(
-                    new int[]{698, 659, 587, 523, 698, 0, 880, 0, 784, 698, 659, 587, 523, 659, 587, 0},
-                    new int[]{147, 220, 147, 220, 175, 261, 196, 147}, 10, true);
+        sfxGrab           = loadCustomOrGenerate("sfx_grab",      () -> generateToneSound(520, 680, 0.08f));
+        sfxThrow          = loadCustomOrGenerate("sfx_throw",     () -> generateToneSound(700, 280, 0.14f));
+        sfxSuccess        = loadCustomOrGenerate("sfx_success",   () -> generateToneSound(440, 880, 0.18f));
+        sfxError          = loadCustomOrGenerate("sfx_error",     () -> generateToneSound(220, 110, 0.28f));
+        sfxClick          = loadCustomOrGenerate("sfx_click",     () -> generateToneSound(800, 900, 0.04f));
+        sfxDoorSlam       = loadCustomOrGenerate("sfx_door_slam", this::generateDoorSlamSound);
+        sfxVictoryFanfare = loadCustomOrGenerate("sfx_victory",   () -> generateJingle(new int[]{523, 659, 784, 1046, 784, 1046}, 0.14f));
+        sfxGameOverTrack  = loadCustomOrGenerate("sfx_gameover",  () -> generateJingle(new int[]{392, 370, 349, 330, 293, 261}, 0.20f));
 
-            // Chill Lo-Fi Synth BGM for the Customize Screen
-            bgmCustomize = generateStageTrack(
-                    new int[]{392, 0, 494, 0, 587, 0, 494, 0, 349, 0, 440, 0, 523, 0, 440, 0},
-                    new int[]{98, 98, 131, 131, 87, 87, 131, 131}, 4, false);
+        // Dedicated Upbeat Arcade Menu & World Map BGM (bgm_menu.ogg)
+        bgmMenu = loadCustomOrGenerate("bgm_menu", () -> generateStageTrack(
+                new int[]{523, 659, 784, 659, 880, 784, 659, 523, 587, 698, 880, 698, 784, 659, 587, 0},
+                new int[]{131, 165, 196, 165, 147, 175, 196, 131}, 6, false));
 
-            bgmLoop = bgmStages[0];
-        } catch (Exception ignored) {}
+        // Chill Customize Screen BGM (bgm_customize.ogg)
+        bgmCustomize = loadCustomOrGenerate("bgm_customize", () -> generateStageTrack(
+                new int[]{392, 0, 494, 0, 587, 0, 494, 0, 349, 0, 440, 0, 523, 0, 440, 0},
+                new int[]{98, 98, 131, 131, 87, 87, 131, 131}, 4, false));
+
+        int[][] baseMelodies = {
+                {523, 0, 659, 587, 523, 659, 784, 0, 698, 0, 659, 587, 523, 587, 659, 0},
+                {440, 523, 659, 0, 587, 523, 440, 0, 392, 440, 523, 587, 659, 0, 587, 0},
+                {587, 698, 880, 0, 784, 698, 659, 0, 587, 659, 698, 784, 880, 0, 784, 659},
+                {659, 0, 784, 880, 987, 880, 784, 659, 587, 0, 659, 784, 659, 587, 494, 0},
+                {698, 659, 587, 523, 698, 0, 880, 0, 784, 698, 659, 587, 523, 659, 587, 0}
+        };
+        int[][] baseBass = {
+                {131, 131, 196, 196, 175, 175, 131, 196},
+                {110, 110, 165, 165, 147, 147, 110, 165},
+                {147, 147, 220, 220, 175, 175, 196, 196},
+                {165, 165, 247, 247, 196, 196, 147, 196},
+                {147, 220, 147, 220, 175, 261, 196, 147}
+        };
+
+        // 20 Unique Stage Tracks (bgm_stage_1.ogg .. bgm_stage_20.ogg)
+        for (int i = 0; i < 20; i++) {
+            final int stageIdx = i;
+            bgmStages[i] = loadCustomOrGenerate("bgm_stage_" + (i + 1), () -> {
+                int[] mel = baseMelodies[stageIdx % 5].clone();
+                int[] bas = baseBass[stageIdx % 5].clone();
+                double pitchShift = Math.pow(1.035, stageIdx / 2);
+                for (int k = 0; k < mel.length; k++) mel[k] = (int) (mel[k] * pitchShift);
+                for (int k = 0; k < bas.length; k++) bas[k] = (int) (bas[k] * pitchShift);
+                int tempo = 7 + (stageIdx % 4);
+                return generateStageTrack(mel, bas, tempo, true);
+            });
+        }
+
+        bgmLoop = bgmMenu;
     }
 
     private Sound generateDoorSlamSound() throws Exception {

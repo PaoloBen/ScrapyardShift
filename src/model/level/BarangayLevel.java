@@ -5,7 +5,7 @@ import model.item.WasteItem;
 
 public class BarangayLevel extends FacilityLevel {
     public BarangayLevel() {
-        super(1, "Shift 1: Barangay MRF", 100, 2.2);
+        super(1, "Community MRF", 100, 2.2);
     }
 
     @Override

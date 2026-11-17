@@ -15,6 +15,10 @@ public class GameController {
     private final Player player;
     private final List<FacilityLevel> levels;
     private int currentLevelIndex;
+    private int maxUnlockedLevel = 0;
+    private int justUnlockedLevel = -1;
+    private boolean activeRun = false;
+
     private final Map<BinType, StorageBay> bays;
     private final List<WorkStation> stations;
     private final List<WasteItem> beltItems;
@@ -30,6 +34,10 @@ public class GameController {
     private boolean inLockerRoom;
     private boolean gameOver;
     private boolean gameWon;
+
+    // 5-Minute Shift Timer (300 seconds * 60 ticks/sec = 18,000 ticks)
+    public static final int SHIFT_DURATION_TICKS = 300 * 60;
+    private int shiftTimerTicks = SHIFT_DURATION_TICKS;
 
     public static final int BELT_START_X = 80;
     public static final int BELT_END_X = 500;
@@ -51,16 +59,32 @@ public class GameController {
     private int beltEndY = 120;
     private int transportedTrash = 0;
     private int lastEarnedShiftCredits = 0;
+    private double stationOverclockAccum = 0.0;
     private boolean shiftVictoryPending = false;
 
     public GameController(String playerName) {
         this.player = new Player(playerName);
         this.levels = List.of(
-                new BarangayLevel(),
-                new IndustrialLevel(),
-                new TyphoonLevel(),
-                new HarborLevel(),
-                new ReactorLevel()
+                new BarangayLevel(),                                               // 1
+                new IndustrialLevel(),                                             // 2
+                new TyphoonLevel(),                                                // 3
+                new HarborLevel(),                                                 // 4
+                new ReactorLevel(),                                                // 5
+                new DynamicFacilityLevel(6,  "Eco-Sorting Station",    2.3, 5),    // 6
+                new DynamicFacilityLevel(7,  "Coastal Logistics Depot",2.5, 6),    // 7
+                new DynamicFacilityLevel(8,  "Tech Park E-Waste Hub",  2.6, 7),    // 8
+                new DynamicFacilityLevel(9,  "Central Sorting Yard",   2.8, 0),    // 9
+                new DynamicFacilityLevel(10, "Drydock Shipyard MRF",   2.9, 1),    // 10
+                new DynamicFacilityLevel(11, "Heavy Smelting Foundry", 3.1, 2),    // 11
+                new DynamicFacilityLevel(12, "Hydro Reclamation Basin",3.2, 3),    // 12
+                new DynamicFacilityLevel(13, "Offshore Reef Terminal", 3.4, 4),    // 13
+                new DynamicFacilityLevel(14, "Lighthouse Point MRF",   3.5, 5),    // 14
+                new DynamicFacilityLevel(15, "Thermal Power Plant",    3.7, 6),    // 15
+                new DynamicFacilityLevel(16, "Automated Steelworks",   3.8, 7),    // 16
+                new DynamicFacilityLevel(17, "Timber & Scrap Mill",    4.0, 1),    // 17
+                new DynamicFacilityLevel(18, "Copper Ore Refinery",    4.2, 2),    // 18
+                new DynamicFacilityLevel(19, "Highland Bio-Dome",      4.4, 3),    // 19
+                new DynamicFacilityLevel(20, "Mega-Nexus Core",        4.6, 4)     // 20
         );
         this.currentLevelIndex = 0;
         this.bays = new EnumMap<>(BinType.class);
@@ -69,7 +93,7 @@ public class GameController {
         this.popups = new ArrayList<>();
         this.mistakeLog = new ArrayList<>();
 
-        this.lastFeedback = "Grab trash from the belt [SPACE/Click], process at machines, & sort into bins!";
+        this.lastFeedback = "Grab trash from the belt [SPACE/Click], process at machines, & walk to bins to sort!";
         this.spawnTimer = 0;
         this.screenShake = 0;
         this.inLockerRoom = true;
@@ -91,11 +115,55 @@ public class GameController {
         stations.add(new WorkStation(StationType.NEUTRALIZER, 380, 350));
     }
 
+    // Returns current Speed Stage (1 to 4) based on the 5-minute countdown timer!
+    public int getTimerSpeedStage() {
+        float elapsedRatio = 1.0f - ((float) shiftTimerTicks / SHIFT_DURATION_TICKS);
+        if (elapsedRatio < 0.25f) return 1; // 5:00 - 3:45 (Stage 1)
+        if (elapsedRatio < 0.50f) return 2; // 3:45 - 2:30 (Stage 2)
+        if (elapsedRatio < 0.75f) return 3; // 2:30 - 1:15 (Stage 3)
+        return 4;                           // 1:15 - 0:00 (Stage 4 Overdrive!)
+    }
+
+    public double getStageSpeedMultiplier() {
+        return switch (getTimerSpeedStage()) {
+            case 1 -> 1.00;
+            case 2 -> 1.30;
+            case 3 -> 1.65;
+            default -> 2.10;
+        };
+    }
+
+    public String getFormattedTimeRemaining() {
+        int totalSec = Math.max(0, (int) Math.ceil(shiftTimerTicks / 60.0));
+        int mins = totalSec / 60;
+        int secs = totalSec % 60;
+        return String.format("%d:%02d", mins, secs);
+    }
+
     public void updateTick(double moveDx, double moveDy) {
         popups.removeIf(FloatingText::update);
         if (screenShake > 0) screenShake--;
 
         if (inLockerRoom || gameOver || gameWon || shiftVictoryPending) return;
+
+        // Tick 5-Minute Shift Countdown Timer
+        int prevStage = getTimerSpeedStage();
+        if (shiftTimerTicks > 0) {
+            shiftTimerTicks--;
+        }
+        int newStage = getTimerSpeedStage();
+        if (newStage > prevStage) {
+            popups.add(new FloatingText("SPEED STAGE " + newStage + "! BELT ACCELERATING!", 320, 95, Color.ORANGE));
+            lastFeedback = "TIMER STAGE " + newStage + "/4: Conveyor belt & music speed increased!";
+        }
+
+        if (shiftTimerTicks <= 0) {
+            gameOver = true;
+            player.clearPendingCredits();
+            mistakeLog.add("Time Expired: Failed to transport " + getCurrentLevel().getTrashQuota() + " items within 5:00.");
+            lastFeedback = "TIME EXPIRED (0:00)! Quota was not reached in time.";
+            return;
+        }
 
         movePlayerWithCollisions(moveDx, moveDy);
         updateForkliftAnimation();
@@ -109,12 +177,12 @@ public class GameController {
         if (botDelivered != null) {
             handleRoute(botDelivered, bays.get(botDelivered.getTargetBin()));
         }
-        if (cleanerBot.getLevel() > 0 && forkliftState == ForkliftState.IDLE
+        if (cleanerBot.canUseForklift() && forkliftState == ForkliftState.IDLE
                 && isNearForklift(cleanerBot.getX(), cleanerBot.getY(), 130) && hasAnyFullBin()) {
             tryDispatchForklift();
         }
 
-        // Update Thrown / Floor Items
+        // Update Thrown / Floor Items (Throwing into machines is allowed; throwing into bins is DISABLED!)
         Iterator<WasteItem> thrownIt = thrownItems.iterator();
         while (thrownIt.hasNext()) {
             WasteItem item = thrownIt.next();
@@ -123,20 +191,12 @@ public class GameController {
                 double centerX = item.getX() + 23;
                 double centerY = item.getY() + 23;
 
-                StorageBay hitBay = getNearbyBay(centerX, centerY, 54);
-                if (hitBay != null && !hitBay.isBeingHauled()) {
-                    handleRoute(item, hitBay);
-                    thrownIt.remove();
-                    continue;
-                }
-
                 boolean handledByStation = false;
                 for (WorkStation station : stations) {
                     if (station.isEmpty() && Math.hypot((station.getX() + 42) - centerX, (station.getY() + 36) - centerY) <= 46) {
                         if (tryLoadItemIntoStation(item, station)) {
                             thrownIt.remove();
                         } else {
-                            // Machine is broken -> bounce onto open floor in front of it
                             item.setPosition(station.getX() + 18, Math.min(430, station.getY() + 78));
                         }
                         handledByStation = true;
@@ -170,36 +230,49 @@ public class GameController {
             }
         }
 
-        // Tick WorkStations (including wrong-item damage & breakdown check!)
-        for (WorkStation station : stations) {
-            if (station.updateTick()) {
-                if (station.consumeWrongItemFinished()) {
-                    WasteItem ejected = station.removeItem();
-                    if (ejected != null) {
-                        ejected.setPosition(station.getX() + 18, Math.min(435, station.getY() + 78));
-                        thrownItems.add(ejected);
-                    }
-                    player.applyPenalty(5);
-                    screenShake = 12;
-                    if (station.isBroken()) {
-                        popups.add(new FloatingText(station.getType().name() + " BROKEN! [REPAIR]", station.getX() - 20, station.getY() - 15, Color.RED));
-                        lastFeedback = station.getType().getLabel() + " BROKE (0% HP)! Walk up & press [SPACE/Click] to Repair!";
+        // Tick WorkStations (Base 1.0x speed + gentle +8% speed per Turbo Overclock level, max 1.8x at Lv.10)
+        int stationTicks = 1;
+        stationOverclockAccum += shop.getStationSpeedBonus() * 0.08;
+        if (stationOverclockAccum >= 1.0) {
+            stationTicks++;
+            stationOverclockAccum -= 1.0;
+        }
+        for (int t = 0; t < stationTicks; t++) {
+            for (WorkStation station : stations) {
+                if (station.updateTick()) {
+                    if (station.consumeWrongItemFinished()) {
+                        WasteItem ejected = station.removeItem();
+                        if (ejected != null) {
+                            ejected.setPosition(station.getX() + 18, Math.min(435, station.getY() + 78));
+                            thrownItems.add(ejected);
+                        }
+                        player.applyPenalty(5);
+                        screenShake = 12;
+                        if (station.isBroken()) {
+                            popups.add(new FloatingText(station.getType().name() + " BROKEN! [REPAIR]", station.getX() - 20, station.getY() - 15, Color.RED));
+                            lastFeedback = station.getType().getLabel() + " BROKE (0% HP)! Walk up & press [SPACE/Click] to Repair!";
+                        } else {
+                            popups.add(new FloatingText("WRONG ITEM! -50% HP", station.getX() - 10, station.getY() - 15, Color.ORANGE));
+                            lastFeedback = "Wrong item damaged " + station.getType().getLabel() + " (HP: " + station.getHealth() + "%)!";
+                        }
                     } else {
-                        popups.add(new FloatingText("WRONG ITEM! -50% HP", station.getX() - 10, station.getY() - 15, Color.ORANGE));
-                        lastFeedback = "Wrong item damaged " + station.getType().getLabel() + " (HP: " + station.getHealth() + "%)!";
+                        if (station.getStoredItem() != null) {
+                            station.getStoredItem().markPersonallyProcessed();
+                        }
+                        popups.add(new FloatingText(station.getType().name() + " READY! (4x HAUL)", station.getX() - 10, station.getY() - 15, Color.GREEN));
+                        lastFeedback = station.getType().getLabel() + " finished! Personally processed items yield 4x Haul value!";
                     }
-                } else {
-                    popups.add(new FloatingText(station.getType().name() + " READY!", station.getX() + 5, station.getY() - 15, Color.GREEN));
-                    lastFeedback = station.getType().getLabel() + " finished processing! Grab item with [SPACE/Click].";
                 }
             }
         }
 
-        // Spawn & Move Items along 4-Way Rotatable Conveyor Belt
+        // Spawn & Move Items along 4-Way Rotatable Conveyor Belt (Scaled by Timer Speed Stage!)
         FacilityLevel level = getCurrentLevel();
+        double stageMult = getStageSpeedMultiplier();
         spawnTimer++;
-        int spawnInterval = Math.max(95, 180 - (level.getLevelNumber() * 25));
-        if (spawnTimer >= spawnInterval && beltItems.size() < 5) {
+        int baseInterval = Math.max(70, 175 - (level.getLevelNumber() * 5));
+        int spawnInterval = Math.max(42, (int) (baseInterval / stageMult));
+        if (spawnTimer >= spawnInterval && beltItems.size() < 6) {
             beltItems.add(level.spawnItem(beltStartX, beltStartY, 1));
             spawnTimer = 0;
         }
@@ -207,8 +280,9 @@ public class GameController {
         double bdx = beltEndX - beltStartX;
         double bdy = beltEndY - beltStartY;
         double bLen = Math.max(1.0, Math.hypot(bdx, bdy));
-        double stepVx = (bdx / bLen) * (level.getBeltSpeed() * 0.45);
-        double stepVy = (bdy / bLen) * (level.getBeltSpeed() * 0.45);
+        double effectiveBeltSpeed = level.getBeltSpeed() * 0.42 * stageMult;
+        double stepVx = (bdx / bLen) * effectiveBeltSpeed;
+        double stepVy = (bdy / bLen) * effectiveBeltSpeed;
 
         Iterator<WasteItem> it = beltItems.iterator();
         while (it.hasNext()) {
@@ -229,32 +303,34 @@ public class GameController {
         if (player.getComplianceMeter().isDepleted()) {
             gameOver = true;
             player.clearPendingCredits();
-            lastFeedback = "SHIFT TERMINATED! Compliance reached 0%.";
+            lastFeedback = "FACILITY SHUTDOWN! Compliance reached 0%.";
         } else if (level.isQuotaMet(transportedTrash) && forkliftState == ForkliftState.IDLE && !shiftVictoryPending) {
             shiftVictoryPending = true;
+            activeRun = true;
             lastEarnedShiftCredits = player.bankPendingCredits();
+            if (currentLevelIndex >= maxUnlockedLevel && currentLevelIndex < levels.size() - 1) {
+                maxUnlockedLevel = currentLevelIndex + 1;
+                justUnlockedLevel = maxUnlockedLevel;
+            }
             model.save.SaveManager.save(this);
             beltItems.clear();
             thrownItems.clear();
             player.setHeldItem(null);
-            lastFeedback = "FORKLIFT QUOTA MET! Earned +$" + lastEarnedShiftCredits + " Credits!";
+            lastFeedback = level.getTitle().toUpperCase() + " QUOTA MET! Earned +$" + lastEarnedShiftCredits + "!";
         }
     }
 
-    // Computes an unblocked pickup/dropoff pose in the open lane beside or above the target bin!
     private double[] getForkliftBayApproach(StorageBay bay) {
         if (bay.getX() >= 700) {
-            // Right-wall bins: approach from the open floor to the left of the bin
             return new double[]{ bay.getX() - 96, bay.getY() };
         } else {
-            // Bottom-row bins (Shift 2): approach from the open highway lane above the bin row!
             return new double[]{ bay.getX() - 18, bay.getY() - 78 };
         }
     }
 
     private void updateForkliftAnimation() {
         if (forkliftState == ForkliftState.IDLE) return;
-        double fkSpeed = 5.2;
+        double fkSpeed = 5.4;
 
         switch (forkliftState) {
             case TO_FULL_BIN -> {
@@ -274,17 +350,18 @@ public class GameController {
                 double[] approach = getForkliftBayApproach(activeHaulBay);
                 double targetX = 935;
                 double targetY = approach[1];
-                // Keep avoidObstacles = true so the Forklift routes around all other bins and machines!
                 if (driveForkliftWithPathfinding(targetX, targetY, fkSpeed * 1.15, true)) {
-                    int hauled = activeHaulBay.getFillLevel();
+                    int hauled = activeHaulBay.getValidHaulUnits();
+                    int wrongIgnored = activeHaulBay.getWrongItemCount();
                     activeHaulBay.empty();
                     this.transportedTrash += hauled;
-                    this.player.addPendingCredits(25);
+                    this.player.addPendingCredits(hauled * 15 * getCurrentLevel().getLevelNumber());
                     this.carryingFullBin = false;
 
                     int quota = getCurrentLevel().getTrashQuota();
-                    popups.add(new FloatingText("+" + hauled + " TRANSPORTED! (" + transportedTrash + "/" + quota + ")", 660, Math.max(80, (int) forkliftY), Color.GREEN));
-                    lastFeedback = "Forklift transported " + hauled + " items! Returning empty " + activeHaulBay.getType().name() + " bin...";
+                    String wrongNote = wrongIgnored > 0 ? " (" + wrongIgnored + " wrong ignored!)" : "";
+                    popups.add(new FloatingText("+" + hauled + " HAULED! (" + transportedTrash + "/" + quota + ")", 640, Math.max(80, (int) forkliftY), hauled > 0 ? Color.GREEN : Color.ORANGE));
+                    lastFeedback = "Forklift hauled +" + hauled + " valid units" + wrongNote + "! Returning empty " + activeHaulBay.getType().name() + " bin...";
                     forkliftState = ForkliftState.RETURN_EMPTY_BIN;
                 }
             }
@@ -309,7 +386,6 @@ public class GameController {
         }
     }
 
-    // Obstacle-Avoiding Forklift Navigation (Uses Grid BFS across all states so it NEVER noclips through bins or machines!)
     private boolean driveForkliftWithPathfinding(double tx, double ty, double speed, boolean avoidObstacles) {
         double directDist = Math.hypot(tx - this.forkliftX, ty - this.forkliftY);
         if (directDist <= speed + 4) {
@@ -354,7 +430,6 @@ public class GameController {
     }
 
     private boolean isForkliftBlocked(double fx, double fy) {
-        // Once past the right-wall bins (fx > 830), the off-screen exit ramp is completely clear
         if (fx > 830) return false;
 
         double cx = fx + 46;
@@ -380,8 +455,6 @@ public class GameController {
 
         for (StorageBay bay : bays.values()) {
             if (!bay.isBeingHauled()) {
-                // While approaching activeHaulBay, allow getting close enough to its front edge to lift it,
-                // while keeping a full solid collision barrier around all other bins!
                 if (bay == activeHaulBay && (forkliftState == ForkliftState.TO_FULL_BIN || forkliftState == ForkliftState.RETURN_EMPTY_BIN)) {
                     if (circleIntersectsRect(cx, cy, 12, bay.getX() + 14, bay.getY() + 16, 60, 44)) return true;
                 } else {
@@ -459,7 +532,6 @@ public class GameController {
         return null;
     }
 
-    // Loads item into machine (even if wrong item, so it plays the processing animation before damaging!)
     private boolean tryLoadItemIntoStation(WasteItem item, WorkStation station) {
         if (station.isBroken()) {
             popups.add(new FloatingText("MACHINE BROKEN! [REPAIR]", station.getX() - 15, station.getY() - 12, Color.RED));
@@ -591,7 +663,7 @@ public class GameController {
 
         String tag = (chargeRatio >= 0.7f) ? "POWER THROW!" : "THROW!";
         popups.add(new FloatingText(tag, px - 25, py - 28, chargeRatio >= 0.7f ? Color.ORANGE : Color.WHITE));
-        lastFeedback = "Threw " + held.getDisplayTag() + " (" + (int) (chargeRatio * 100) + "% power)!";
+        lastFeedback = "Threw " + held.getDisplayTag() + "! (Note: Bins require walk-up drop-off!)";
     }
 
     public void interact() {
@@ -651,7 +723,7 @@ public class GameController {
                 WasteItem item = nearStation.removeItem();
                 player.setHeldItem(item);
                 popups.add(new FloatingText("Picked up: " + item.getDisplayTag(), px - 35, py - 28, Color.YELLOW));
-                lastFeedback = "Picked up processed " + item.getDisplayTag() + "!";
+                lastFeedback = "Picked up processed " + item.getDisplayTag() + "! Walk to the matching Bin to drop off.";
             } else if (!nearStation.isWrongItemProcessing()) {
                 nearStation.boostProcess();
                 popups.add(new FloatingText("BOOST!", nearStation.getX() + 20, nearStation.getY() - 8, Color.YELLOW));
@@ -673,7 +745,7 @@ public class GameController {
             closestBelt.clearSpawnDrop();
             player.setHeldItem(closestBelt);
             popups.add(new FloatingText("Picked up: " + closestBelt.getDisplayTag(), px - 35, py - 28, Color.YELLOW));
-            lastFeedback = "Picked up " + closestBelt.getDisplayTag() + "! Tap to Place or Hold to Power-Throw!";
+            lastFeedback = "Picked up " + closestBelt.getDisplayTag() + "! Throw into Machines or walk to Bins!";
             return;
         }
 
@@ -699,30 +771,30 @@ public class GameController {
             int mult = getCurrentLevel().getLevelNumber();
 
             if (item.getTargetBin() == bay.getType()) {
-                if (item.isPreprocessed()) {
-                    int pts = 10 * mult + 15;
-                    player.addScore(10 * mult, 15);
-                    popups.add(new FloatingText("+" + pts + " PREPROCESSED!", bay.getX() - 20, bay.getY() - 10, Color.GREEN));
-                    lastFeedback = "PERFECT PREPROCESS + SORT! +" + pts + " pts";
+                if (item.isPersonallyProcessed()) {
+                    int pts = (10 * mult) * 4;
+                    player.addScore(pts, 15);
+                    popups.add(new FloatingText("+" + pts + " (4x HAUL VALUE!)", bay.getX() - 25, bay.getY() - 10, Color.GREEN));
+                    lastFeedback = "PERSONALLY PROCESSED! Counts as 4x Haul Value in " + bay.getType().name() + "!";
                 } else {
                     int pts = 10 * mult;
                     player.addScore(pts);
-                    popups.add(new FloatingText("+" + pts + " SORTED!", bay.getX() - 10, bay.getY() - 10, Color.CYAN));
-                    lastFeedback = "Correct! Sorted " + item.getDisplayTag() + " into " + bay.getType().name();
+                    popups.add(new FloatingText("+" + pts + " SORTED (1x)", bay.getX() - 10, bay.getY() - 10, Color.CYAN));
+                    lastFeedback = "Sorted " + item.getDisplayTag() + " into " + bay.getType().name() + " (1x Haul Value).";
                 }
             } else {
                 player.applyPenalty(item.getPenalty());
                 screenShake = 12;
                 String err = item.getDisplayTag() + " -> " + bay.getType().name() + ": " + item.getExplanation();
-                popups.add(new FloatingText("-" + item.getPenalty() + "% WRONG BIN!", bay.getX() - 20, bay.getY() - 10, Color.RED));
-                lastFeedback = "VIOLATION (-" + item.getPenalty() + "%): " + item.getExplanation();
+                popups.add(new FloatingText("-" + item.getPenalty() + "% WRONG BIN! (0x HAUL)", bay.getX() - 25, bay.getY() - 10, Color.RED));
+                lastFeedback = "WRONG BIN (-" + item.getPenalty() + "%): Takes up 1 bin slot, but yields 0 Haul when transported!";
                 mistakeLog.add(err);
             }
         } catch (BinFullException e) {
             player.applyPenalty(5);
             screenShake = 10;
             popups.add(new FloatingText("BIN FULL! -5%", bay.getX() - 10, bay.getY() - 10, Color.ORANGE));
-            lastFeedback = "OVERFLOW (-5%): Bin full! Activate the Forklift to haul full bins!";
+            lastFeedback = "OVERFLOW (-5%): Bin full! Wake up the Forklift driver to haul full bins!";
             mistakeLog.add(e.getMessage());
         }
     }
@@ -773,15 +845,44 @@ public class GameController {
         StorageBay nextFull = findNextFullBin();
         if (nextFull == null) {
             popups.add(new FloatingText("NO FULL BINS!", (int) forkliftX, (int) forkliftY - 12, Color.ORANGE));
-            lastFeedback = "Forklift Idle: Fill at least one bin completely before transporting!";
+            lastFeedback = "Forklift Driver Sleeping: Fill at least one bin completely before waking him!";
             return false;
         }
 
         this.activeHaulBay = nextFull;
         this.forkliftState = ForkliftState.TO_FULL_BIN;
-        popups.add(new FloatingText("FORKLIFT DISPATCHED!", (int) forkliftX - 10, (int) forkliftY - 12, Color.CYAN));
-        lastFeedback = "Forklift en route to haul full " + nextFull.getType().name() + " bin!";
+        popups.add(new FloatingText("DRIVER AWAKE! HAULING!", (int) forkliftX - 15, (int) forkliftY - 12, Color.CYAN));
+        lastFeedback = "Forklift driver woke up! En route to haul full " + nextFull.getType().name() + " bin!";
         return true;
+    }
+
+    public void selectLevel(int index) {
+        int clamped = Math.max(0, Math.min(levels.size() - 1, Math.min(maxUnlockedLevel, index)));
+        this.currentLevelIndex = clamped;
+        this.activeRun = true;
+        this.transportedTrash = 0;
+        this.shiftTimerTicks = SHIFT_DURATION_TICKS;
+        this.spawnTimer = 0;
+        this.beltItems.clear();
+        this.thrownItems.clear();
+        this.popups.clear();
+        this.mistakeLog.clear();
+        this.stations.forEach(ws -> { ws.clear(); ws.repairFull(); });
+        this.bays.values().forEach(StorageBay::empty);
+        this.cleanerBot.reset();
+        this.player.setHeldItem(null);
+        this.player.clearPendingCredits();
+        this.player.getComplianceMeter().reset(100);
+        this.player.getStreakMeter().reset(0);
+        this.shiftVictoryPending = false;
+        this.gameOver = false;
+        this.gameWon = false;
+        this.shop.applyPendingUpgrades(player, cleanerBot, bays.values());
+        applyStageLayout();
+        this.player.resetPosition(400, 260);
+        nudgePlayerOutOfObstacles();
+        model.save.SaveManager.save(this);
+        this.lastFeedback = "Deployed to " + getCurrentLevel().getTitle() + "! Complete quota before 5:00 expires!";
     }
 
     public void applyStageLayout() {
@@ -824,8 +925,12 @@ public class GameController {
         stations.forEach(WorkStation::repairFull);
 
         if (currentLevelIndex < levels.size() - 1) {
+            if (currentLevelIndex >= maxUnlockedLevel) {
+                maxUnlockedLevel = currentLevelIndex + 1;
+            }
             currentLevelIndex++;
             this.transportedTrash = 0;
+            this.shiftTimerTicks = SHIFT_DURATION_TICKS;
             beltItems.clear();
             thrownItems.clear();
             stations.forEach(WorkStation::clear);
@@ -838,15 +943,17 @@ public class GameController {
                 typhoon.triggerSurgeEvent();
             }
             model.save.SaveManager.save(this);
-            lastFeedback = "WELCOME TO " + getCurrentLevel().getTitle().toUpperCase() + "! Shop upgrades applied!";
+            lastFeedback = "WELCOME TO " + getCurrentLevel().getTitle().toUpperCase() + "!";
         } else {
             gameWon = true;
-            lastFeedback = "ALL 5 SHIFTS CLEARED! Final Score: " + player.getScore();
+            lastFeedback = "ALL 20 MRF FACILITIES CLEARED! Final Score: " + player.getScore();
         }
     }
 
     public void loadSavedProgress(int savedLevelIdx, int savedScore) {
         this.currentLevelIndex = Math.max(0, Math.min(levels.size() - 1, savedLevelIdx));
+        this.maxUnlockedLevel = Math.max(this.maxUnlockedLevel, this.currentLevelIndex);
+        this.shiftTimerTicks = SHIFT_DURATION_TICKS;
         this.player.resetScore();
         this.player.clearPendingCredits();
         if (savedScore > 0) this.player.addScore(savedScore);
@@ -862,18 +969,25 @@ public class GameController {
     }
 
     public void resetToBrandNewSave() {
+        this.currentLevelIndex = 0;
+        this.maxUnlockedLevel = 0;
+        this.justUnlockedLevel = -1;
+        this.activeRun = false;
         this.player.resetUpgrades();
+        this.player.resetScore();
         this.player.clearPendingCredits();
         this.player.getCosmetics().resetDefaults();
         this.cleanerBot.setLevel(0);
         this.shop.resetAll(this.player, this.bays.values());
         resetGame();
+        this.activeRun = false;
     }
 
     public void resetGame() {
-        this.currentLevelIndex = 0;
+        // Keeps currentLevelIndex as-is so restarting only resets the current facility!
         this.transportedTrash = 0;
         this.lastEarnedShiftCredits = 0;
+        this.shiftTimerTicks = SHIFT_DURATION_TICKS;
         this.player.clearPendingCredits();
         this.shop.applyPendingUpgrades(player, cleanerBot, bays.values());
         applyStageLayout();
@@ -894,14 +1008,24 @@ public class GameController {
         this.shiftVictoryPending = false;
         this.gameOver = false;
         this.gameWon = false;
-        this.lastFeedback = "Shift restarted! Tap [SPACE/Click] to Place or Hold to Power-Throw!";
+        this.lastFeedback = "Facility restarted! Walk to Bins to sort or Hold [SPACE/Click] to throw into Machines!";
     }
 
     public model.bot.CleanerBot getCleanerBot() { return cleanerBot; }
     public model.shop.UpgradeShop getShop() { return shop; }
     public Player getPlayer() { return player; }
+    public List<FacilityLevel> getLevels() { return levels; }
     public FacilityLevel getCurrentLevel() { return levels.get(currentLevelIndex); }
     public int getCurrentLevelIndex() { return currentLevelIndex; }
+    public int getMaxUnlockedLevel() { return maxUnlockedLevel; }
+    public void setMaxUnlockedLevel(int max) { this.maxUnlockedLevel = Math.max(0, Math.min(levels.size() - 1, max)); }
+    public int consumeJustUnlockedLevel() {
+        int val = justUnlockedLevel;
+        justUnlockedLevel = -1;
+        return val;
+    }
+    public boolean hasActiveRun() { return activeRun; }
+    public void setHasActiveRun(boolean active) { this.activeRun = active; }
     public Collection<StorageBay> getBays() { return bays.values(); }
     public List<WorkStation> getStations() { return stations; }
     public List<WasteItem> getBeltItems() { return beltItems; }
